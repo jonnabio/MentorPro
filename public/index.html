@@ -3,38 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generador de Preguntas</title>
+    <title>MentorPro - Quiz</title>
     <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-    <div class="container">
-        <h1>Generador de Preguntas de Opción Múltiple</h1>
-        <div class="input-section">
-            <textarea id="learningObjective" placeholder="Ingresa el objetivo de aprendizaje aquí..."></textarea>
-            <button id="generateBtn">Generar Preguntas</button>
-        </div>        <div id="questionsContainer" class="questions-container">
-            <!-- Questions will be generated here -->
-        </div>
+<body>    <div class="container">
+        <nav class="navigation">
+            <a href="admin.html" class="nav-link">Administración</a>
+            <a href="index.html" class="nav-link active">Quiz</a>
+        </nav>
 
-        <div class="section-divider"></div>
-
-        <div class="search-section">
-            <h2>Buscar Preguntas Existentes</h2>
-            <div class="search-controls">                <select id="searchSubject" onchange="loadTopics()">
-                    <option value="">Todas las Materias</option>
-                    <option value="Espanol">Español</option>
-                    <option value="Matematicas">Matemáticas</option>
-                    <option value="Ciencias">Ciencias</option>
-                    <option value="Social Studies">Social Studies</option>
+        <h1>MentorPro</h1>
+        
+        <div class="quiz-controls">
+            <div class="select-container">
+                <label for="subjectSelect">Materia:</label>                <select id="subjectSelect">
+                    <option value="">Cargando materias...</option>
                 </select>
-                <select id="searchTopic">
+            </div>
+
+            <div class="select-container">
+                <label for="topicSelect">Tema:</label>
+                <select id="topicSelect">
                     <option value="">Todos los Temas</option>
                 </select>
-                <button onclick="searchQuestions()">Buscar</button>
             </div>
-            <div id="searchResults" class="search-results"></div>
+
+            <button id="searchBtn" class="primary-button">Buscar Preguntas</button>
+        </div>
+
+        <div id="loadingIndicator" class="loading" style="display: none;">
+            Cargando preguntas...
+        </div>
+
+        <div id="questionsContainer" class="questions-container">
+            <!-- Questions will be displayed here -->
         </div>
     </div>
-    <script src="app.js"></script>
+    <script src="quiz.js"></script>
 </body>
 </html>

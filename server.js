@@ -212,6 +212,19 @@ app.get('/api/questions', async (req, res) => {
   }
 });
 
+// Add endpoint to get subjects
+app.get('/api/subjects', async (req, res) => {
+  try {
+    const validSubjects = ['Espanol', 'Matematicas', 'Ciencias', 'Social Studies'];
+    res.json({ subjects: validSubjects });
+  } catch (error) {
+    console.error('Error fetching subjects:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener las materias. Por favor intente de nuevo.' 
+    });
+  }
+});
+
 // Add endpoint to get unique topics by subject
 app.get('/api/topics', async (req, res) => {
   try {
