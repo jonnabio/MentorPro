@@ -152,24 +152,43 @@ document.addEventListener('DOMContentLoaded', () => {
         questionsContainer.innerHTML = '';
         questionsContainer.appendChild(scoreDisplay);
         
-        questions.forEach((q, qIndex) => {
-            const questionDiv = document.createElement('div');
+        questions.forEach((q, qIndex) => {            const questionDiv = document.createElement('div');
             questionDiv.className = 'question';
-            questionDiv.innerHTML = `
-                <h3>Pregunta ${qIndex + 1}</h3>
-                <p>${q.question}</p>
-                <div class="options">
-                    ${q.options.map((option, oIndex) => `
-                        <div class="option">
-                            <input type="radio" 
-                                   name="q${q.id}" 
-                                   value="${oIndex}" 
-                                   id="q${q.id}_${oIndex}" />
-                            <label for="q${q.id}_${oIndex}">${option}</label>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+            
+            // Create elements individually for better control
+            const title = document.createElement('h3');
+            title.textContent = `Pregunta ${qIndex + 1}`;
+            
+            const questionText = document.createElement('p');
+            questionText.textContent = q.question;
+            
+            const optionsForm = document.createElement('form');
+            optionsForm.className = 'options';
+            // Prevent form submission
+            optionsForm.addEventListener('submit', (e) => e.preventDefault());
+            
+            q.options.forEach((option, oIndex) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option';
+                
+                const input = document.createElement('input');
+                input.type = 'radio';
+                input.name = `q${q.id}`;
+                input.value = oIndex;
+                input.id = `q${q.id}_${oIndex}`;
+                
+                const label = document.createElement('label');
+                label.htmlFor = `q${q.id}_${oIndex}`;
+                label.textContent = option;
+                
+                optionDiv.appendChild(input);
+                optionDiv.appendChild(label);
+                optionsForm.appendChild(optionDiv);
+            });
+            
+            questionDiv.appendChild(title);
+            questionDiv.appendChild(questionText);
+            questionDiv.appendChild(optionsForm);
             questionsContainer.appendChild(questionDiv);
 
             // Add keyboard navigation and event listeners
