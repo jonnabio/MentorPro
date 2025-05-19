@@ -1,0 +1,253 @@
+:root {
+    --background: #121212;
+    --text: #e0e0e0;
+    --primary: #BB86FC;
+    --secondary: #03DAC6;
+    --surface: #1E1E1E;
+}
+
+body {
+    background-color: var(--background);
+    color: var(--text);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 20px;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+h1 {
+    color: var(--primary);
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.input-section {
+    margin-bottom: 30px;
+}
+
+textarea {
+    width: 100%;
+    height: 100px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--primary);
+    background-color: var(--surface);
+    color: var(--text);
+    font-size: 16px;
+    margin-bottom: 15px;
+    resize: vertical;
+}
+
+button {
+    background-color: var(--primary);
+    color: var(--background);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    display: block;
+    margin: 0 auto;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.questions-container {
+    background-color: var(--surface);
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.question {
+    margin-bottom: 25px;
+    padding: 15px;
+    border-left: 3px solid var(--secondary);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.question h3 {
+    color: var(--secondary);
+    margin-top: 0;
+}
+
+.options {
+    list-style-type: none;
+    padding: 0;
+}
+
+.option {
+    padding: 10px;
+    margin: 5px 0;
+    background-color: rgba(187, 134, 252, 0.1);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.option:hover {
+    background-color: rgba(187, 134, 252, 0.2);
+}
+
+.correct {
+    background-color: rgba(3, 218, 198, 0.2);
+}
+
+.loading {
+    text-align: center;
+    color: var(--primary);
+    font-style: italic;
+}
+
+.search-section {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background-color: var(--surface);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.search-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.search-controls select,
+.search-controls input {
+    flex: 1;
+    padding: 0.5rem;
+    background-color: var(--background);
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    color: var(--text);
+}
+
+.search-controls button {
+    padding: 0.5rem 1rem;
+    background-color: var(--primary);
+    color: var(--background);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.search-controls button:hover {
+    opacity: 0.9;
+}
+
+.search-results {
+    margin-top: 1.5rem;
+}
+
+.no-results {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text);
+    opacity: 0.7;
+}
+
+/* Add a divider between generate and search sections */
+.section-divider {
+    margin: 2rem 0;
+    border-top: 1px solid var(--primary);
+    opacity: 0.2;
+}
+
+.question-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.question-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.edit-btn,
+.delete-btn,
+.save-btn,
+.cancel-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: opacity 0.2s;
+}
+
+.edit-btn {
+    background-color: var(--secondary);
+    color: var(--background);
+}
+
+.delete-btn {
+    background-color: #ff4444;
+    color: var(--background);
+}
+
+.save-btn {
+    background-color: #4CAF50;
+    color: var(--background);
+}
+
+.cancel-btn {
+    background-color: #666;
+    color: var(--background);
+}
+
+.edit-form {
+    background-color: var(--surface);
+    padding: 1rem;
+    border-radius: 4px;
+    margin-top: 1rem;
+}
+
+.edit-form input,
+.edit-form select {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    background-color: var(--background);
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    color: var(--text);
+}
+
+.edit-controls {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.question-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    opacity: 0.7;
+    margin-top: 1rem;
+}
+
+.subject-label,
+.topic-label {
+    background-color: rgba(187, 134, 252, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
