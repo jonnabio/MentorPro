@@ -5,8 +5,31 @@ const Database = require('better-sqlite3');
 const { OpenAI } = require('openai');
 
 const app = express();
-const db = new Database('quiz.db');
-const openai = new OpenAI(process.env.OPENAI_API_KEY);
+
+// Initialize database with better error handling
+let db;
+try {
+    db = new Database('quiz.db');
+    // Test the connection
+    db.prepare('SELECT 1').get();
+    console.log('Database connection successful');
+} catch (error) {
+    console.error('Database initialization error:', error);
+    process.exit(1); // Exit if we can't connect to the database
+}
+
+// Initialize OpenAI with better error handling
+let openai;
+try {
+    if (!process.env.OPENAI_API_KEY) {
+        throw new Error('OPENAI_API_KEY environment variable is not set');
+    }
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    console.log('OpenAI initialization successful');
+} catch (error) {
+    console.error('OpenAI initialization error:', error);
+    process.exit(1); // Exit if we can't initialize OpenAI
+}
 
 // Middleware
 app.use(cors({
@@ -23,7 +46,8 @@ app.use(express.static('public'));
 
 // Initialize database
 db.exec(`
-  CREATE TABLE IF NOT EXISTS questions (
+  DROP TABLE IF EXISTS questions;
+  CREATE TABLE questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subject TEXT,
     topic TEXT,
@@ -31,8 +55,9 @@ db.exec(`
     question TEXT,
     options TEXT,
     correct_answer INTEGER,
+    difficulty TEXT DEFAULT 'medium',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
+  );
 `);
 
 // Classify the subject and topic using OpenAI
@@ -49,13 +74,28 @@ async function classifyDescription(description) {  const classificationPrompt = 
       "topic": "tema específico del texto"
     }
   `;
-
   try {
+    // Log the OpenAI configuration
+    console.log('OpenAI Configuration:', {
+      apiKey: process.env.OPENAI_API_KEY ? '***' + process.env.OPENAI_API_KEY.slice(-4) : 'not set',
+      model: 'gpt-3.5-turbo',
+    });
+    
+    console.log('Sending classification request to OpenAI...');
+    console.log('Classification prompt:', classificationPrompt);
+    
     const completion = await openai.chat.completions.create({
       messages: [{ role: "user", content: classificationPrompt }],
       model: "gpt-3.5-turbo",
       temperature: 0.3,
-    });    const classification = JSON.parse(completion.choices[0].message.content);
+    });
+    
+    console.log('OpenAI Response:', {
+      status: 'success',
+      content: completion.choices[0].message.content,
+      model: completion.model,
+      usage: completion.usage
+    });const classification = JSON.parse(completion.choices[0].message.content);
     console.log('Raw classification:', classification);
     
     // Validate the subject
@@ -64,16 +104,33 @@ async function classifyDescription(description) {  const classificationPrompt = 
       throw new Error('Invalid subject. Must be one of: ' + validSubjects.join(', '));
     }
     
-    return classification;
-  } catch (error) {
-    console.error('Error classifying description:', error);
-    throw error;
+    return classification;  } catch (error) {
+    console.error('Error classifying description:', {
+      error: error.message,
+      stack: error.stack,
+      description
+    });
+    
+    // More specific error messages based on the error type
+    if (error.message.includes('JSON')) {
+      throw new Error('Error al procesar la respuesta de clasificación. Formato inválido.');
+    } else if (error.message.includes('API key')) {
+      throw new Error('Error de configuración del servidor.');
+    } else {
+      throw new Error('Error al clasificar la descripción: ' + error.message);
+    }
   }
 }
 
 // Generate questions using OpenAI
-async function generateQuestions(description, classification) {
+async function generateQuestions(description, classification, difficulty = 'medium') {
   try {
+    const difficultyInstructions = {
+      easy: "Las preguntas deben ser básicas, usando conceptos simples y respuestas directas.",
+      medium: "Las preguntas deben requerir un entendimiento básico de los conceptos.",
+      hard: "Las preguntas deben requerir pensamiento crítico y aplicación de conceptos."
+    };
+
     const questionPrompt = `
       Genera 3 preguntas de opción múltiple en español para la siguiente materia y tema. 
       Las preguntas deben ser apropiadas para estudiantes de primaria.
@@ -81,6 +138,9 @@ async function generateQuestions(description, classification) {
       Materia: ${classification.subject}
       Tema: ${classification.topic}
       Descripción: ${description}
+      Dificultad: ${difficulty}
+      
+      Instrucciones de dificultad: ${difficultyInstructions[difficulty]}
       
       IMPORTANTE: La respuesta debe ser un objeto JSON válido con este formato exacto.
       Todas las propiedades deben estar entre comillas dobles.
@@ -93,36 +153,97 @@ async function generateQuestions(description, classification) {
             "topic": "${classification.topic}",
             "question": "pregunta aquí",
             "options": ["opción 1", "opción 2", "opción 3", "opción 4"],
-            "correctAnswer": 0
+            "correctAnswer": 0,
+            "difficulty": "${difficulty}"
           }
         ]
       }
       
       No incluyas ningún texto adicional antes o después del JSON.
-    `;
-
+    `;    console.log('Sending question generation request to OpenAI...');
     const completion = await openai.chat.completions.create({
       messages: [{ role: "user", content: questionPrompt }],
       model: "gpt-3.5-turbo",
       temperature: 0.5,
     });
-    
-    console.log('Raw GPT response:', completion.choices[0].message.content);
+      console.log('Raw GPT response:', completion.choices[0].message.content);
 
-    return JSON.parse(completion.choices[0].message.content);
+    // Validate that we have a response and it has content
+    if (!completion.choices || !completion.choices[0] || !completion.choices[0].message) {
+      throw new Error('Invalid response structure from OpenAI');
+    }
+
+    const content = completion.choices[0].message.content.trim();
+    console.log('Attempting to parse response:', content);
+
+    try {
+      const parsedResponse = JSON.parse(content);
+      
+      // Validate response structure
+      if (!parsedResponse.questions || !Array.isArray(parsedResponse.questions)) {
+        throw new Error('Invalid response format: missing questions array');
+      }
+
+      // Validate each question
+      parsedResponse.questions.forEach((q, i) => {
+        if (!q.subject || !q.topic || !q.question || !Array.isArray(q.options) || 
+            q.options.length !== 4 || typeof q.correctAnswer !== 'number' ||
+            q.correctAnswer < 0 || q.correctAnswer > 3) {
+          throw new Error(`Invalid question format at index ${i}`);
+        }
+      });
+
+      return parsedResponse;
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', {
+        error: parseError.message,
+        response: completion.choices[0].message.content
+      });
+      throw new Error('Error al procesar la respuesta. Formato inválido.');
+    }
   } catch (error) {
-    console.error('Error generating questions:', error);
-    throw error;
+    console.error('Error generating questions:', {
+      error: error.message,
+      stack: error.stack,
+      classification,
+      difficulty,
+      description
+    });
+      // More specific error messages based on the error type
+    if (error.message.includes('JSON')) {
+      throw new Error('Error al procesar la respuesta de las preguntas. Formato inválido.');
+    } else if (error.message.includes('API key')) {
+      throw new Error('Error de configuración del servidor.');
+    } else if (error.message.includes('rate limit')) {
+      throw new Error('Se ha excedido el límite de solicitudes. Por favor intente de nuevo más tarde.');
+    } else if (error.name === 'OpenAIError') {
+      console.error('OpenAI specific error:', error);
+      if (error.status === 429) {
+        throw new Error('Se ha excedido el límite de solicitudes. Por favor intente de nuevo más tarde.');
+      } else {
+        throw new Error('Error en el servicio de OpenAI. Por favor intente de nuevo más tarde.');
+      }
+    } else {
+      throw new Error('Error al generar preguntas: ' + error.message);
+    }
   }
 }
 
 // API Endpoints
 app.post('/api/generate', async (req, res) => {
   try {
-    const { description } = req.body;
+    console.log('Received generate request:', req.body);
+    
+    const { description, difficulty = 'medium' } = req.body;
     
     if (!description) {
+      console.log('Missing description in request');
       return res.status(400).json({ error: 'Por favor ingresa una descripción' });
+    }
+
+    if (!['easy', 'medium', 'hard'].includes(difficulty)) {
+      console.log('Invalid difficulty:', difficulty);
+      return res.status(400).json({ error: 'Dificultad inválida. Debe ser: easy, medium, o hard' });
     }
 
     // First attempt to classify the description
@@ -130,14 +251,14 @@ app.post('/api/generate', async (req, res) => {
     const classification = await classifyDescription(description);
     console.log('Classification result:', classification);
 
-    // Then generate questions
+    // Then generate questions with difficulty
     console.log('Generating questions with classification:', classification);
-    const generatedQuestions = await generateQuestions(description, classification);
+    const generatedQuestions = await generateQuestions(description, classification, difficulty);
     
     // Store questions in database
     const stmt = db.prepare(`
-      INSERT INTO questions (subject, topic, learning_objective, question, options, correct_answer)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO questions (subject, topic, learning_objective, question, options, correct_answer, difficulty)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     const questions = generatedQuestions.questions.map(q => {
@@ -147,18 +268,49 @@ app.post('/api/generate', async (req, res) => {
         description,
         q.question,
         JSON.stringify(q.options),
-        q.correctAnswer
+        q.correctAnswer,
+        q.difficulty
       );
       return { ...q, id: result.lastInsertRowid };
     });
 
     res.json({ questions });  } catch (error) {
-    console.error('Server error:', error);
-    // Check if it's a validation error or other error
+    console.error('Server error:', {
+      error: error.message,
+      stack: error.stack,
+      body: req.body
+    });    // Handle different types of errors with appropriate status codes and messages
     if (error.message.includes('Invalid subject')) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ 
+        error: error.message 
+      });
+    } else if (error.message.includes('API key')) {
+      console.error('OpenAI API Key error:', error);
+      res.status(500).json({ 
+        error: 'Error de configuración del servidor. Por favor contacte al administrador.' 
+      });
+    } else if (error.message.includes('JSON')) {
+      res.status(500).json({ 
+        error: 'Error al procesar la respuesta. Por favor intente de nuevo.' 
+      });
+    } else if (error.message.includes('clasificar')) {
+      res.status(400).json({ 
+        error: 'No se pudo clasificar la descripción. Por favor intente con una descripción más clara.' 
+      });
+    } else if (error.message.includes('generar')) {
+      res.status(500).json({ 
+        error: 'Error al generar las preguntas. Por favor intente de nuevo con una descripción diferente.' 
+      });
+    } else if (error.name === 'OpenAIError') {
+      console.error('OpenAI API error:', error);
+      res.status(500).json({ 
+        error: 'Error en el servicio de OpenAI. Por favor intente de nuevo más tarde.' 
+      });
     } else {
-      res.status(500).json({ error: 'Error al generar preguntas. Por favor intente de nuevo.' });
+      console.error('Unexpected error:', error);
+      res.status(500).json({ 
+        error: 'Error inesperado. Por favor intente de nuevo.' 
+      });
     }
   }
 });
@@ -166,7 +318,7 @@ app.post('/api/generate', async (req, res) => {
 // Add endpoint to query questions
 app.get('/api/questions', async (req, res) => {
   try {
-    const { subject, topic } = req.query;
+    const { subject, topic, difficulty, limit } = req.query;
     let query = 'SELECT * FROM questions';
     const params = [];
 
@@ -180,35 +332,64 @@ app.get('/api/questions', async (req, res) => {
       conditions.push('topic = ?');
       params.push(topic);
     }
+    if (difficulty) {
+      conditions.push('difficulty = ?');
+      params.push(difficulty);
+    }
 
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY RANDOM()';  // Randomize questions for quizzes
+
+    if (limit) {
+      query += ' LIMIT ?';
+      params.push(parseInt(limit));
+    }    // Log query details
+    console.log('Executing query:', {
+      query,
+      params,
+      conditions
+    });
 
     // Execute query
     const stmt = db.prepare(query);
     let questions = stmt.all(...params);
 
+    console.log('Query results:', {
+      count: questions.length,
+      first: questions[0]
+    });
+
     // Parse the options JSON string for each question
-    questions = questions.map(q => ({
-      ...q,
-      options: JSON.parse(q.options)
-    }));
+    questions = questions.map(q => {
+      try {
+        return {
+          ...q,
+          options: JSON.parse(q.options)
+        };
+      } catch (e) {
+        console.error('Error parsing options for question:', {
+          id: q.id,
+          options: q.options,
+          error: e.message
+        });
+        throw new Error('Error interno al procesar las preguntas');
+      }
+    });
 
     if (questions.length === 0) {
       return res.status(404).json({ 
-        message: 'No se encontraron preguntas con los criterios especificados' 
+        error: 'No se encontraron preguntas',
+        questions: []
       });
     }
 
     res.json({ questions });
   } catch (error) {
     console.error('Error querying questions:', error);
-    res.status(500).json({ 
-      error: 'Error al buscar preguntas. Por favor intente de nuevo.' 
-    });
+    res.status(500).json({ error: 'Error al buscar preguntas' });
   }
 });
 
@@ -325,6 +506,16 @@ app.patch('/api/questions/:id', async (req, res) => {
     console.error('Error updating question:', error);
     res.status(500).json({ error: 'Error al actualizar la pregunta. Por favor intente de nuevo.' });
   }
+});
+
+// Add redirect for old admin URL
+app.get('/admin.html', (req, res) => {
+    res.redirect('/admin');
+});
+
+// Add direct route for admin section
+app.get('/admin', (req, res) => {
+    res.sendFile('admin/index.html', { root: './public' });
 });
 
 // Start server

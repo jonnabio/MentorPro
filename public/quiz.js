@@ -1,78 +1,118 @@
+// Store DOM elements globally so they persist
+const elements = {};
+const features = {};
+
+function initializeElement(id) {
+    const element = document.getElementById(id);
+    elements[id] = element;
+    if (!element) {
+        console.warn(`Element #${id} not found during initialization`);
+        return false;
+    }
+    console.log(`Element #${id} found successfully`);
+    return true;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    const subjectSelect = document.getElementById('subjectSelect');
-    const topicSelect = document.getElementById('topicSelect');
-    const searchBtn = document.getElementById('searchBtn');
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    const questionsContainer = document.getElementById('questionsContainer');
+    console.log('DOMContentLoaded event fired');
+    
+    // Initialize DOM elements with error checking
+    const elementIds = [
+        'subjectSelect',
+        'topicSelect',
+        'difficultySelect',
+        'searchBtn',
+        'loadingIndicator',
+        'questionsContainer',
+        'quizComplete',
+        'newQuizBtn',
+        'completionMessage',
+        'finalScore',
+        'difficultyRecommendation'
+    ];
+      // Initialize features independently
+    const initializeFeature = (name, requiredElements) => {
+        console.log(`Initializing feature: ${name}`);
+        const results = requiredElements.map(id => {
+            const success = initializeElement(id);
+            if (!success) {
+                console.warn(`Missing element ${id} for feature ${name}`);
+            }
+            return success;
+        });
+        const isAvailable = results.every(result => result);
+        features[name] = isAvailable;
+        console.log(`Feature ${name} initialization ${isAvailable ? 'successful' : 'failed'}`);
+        return isAvailable;
+    };
+
+    // Initialize each feature with its required elements
+    initializeFeature('subjectSelection', ['subjectSelect']);
+    initializeFeature('topicSelection', ['topicSelect']);
+    initializeFeature('difficultySelection', ['difficultySelect']);
+    initializeFeature('quizStart', ['searchBtn', 'questionsContainer']);
+    initializeFeature('loadingIndicator', ['loadingIndicator']);
+    initializeFeature('questionsContainer', ['questionsContainer']);
+    
+    // Split quiz completion into core and extra features
+    const hasQuizComplete = initializeFeature('quizComplete', ['quizComplete', 'newQuizBtn']);
+    const hasScoreDisplay = initializeFeature('scoreDisplay', ['completionMessage', 'finalScore']);
+    const hasDifficultyRecommendation = initializeFeature('difficultyRecommendation', ['difficultyRecommendation']);
+
+    // Log feature availability
+    console.log('Features initialized:', features);
+
     let currentScore = 0;
     let totalAnswered = 0;
 
-    // Load subjects on page load
-    loadSubjects();
-
-    // Load topics when subject changes
-    subjectSelect.addEventListener('change', loadTopics);
-
-    // Search for questions when button is clicked
-    searchBtn.addEventListener('click', searchQuestions);
-
+    // Function declarations
     async function loadSubjects() {
+        if (!features.subjectSelection) {
+            console.warn('Subject selection is not available');
+            return;
+        }
+
         try {
-            console.log('Loading subjects...');
-            subjectSelect.innerHTML = '<option value="">Cargando materias...</option>';
-            subjectSelect.disabled = true;
+            elements.subjectSelect.innerHTML = '<option value="">Cargando materias...</option>';
+            elements.subjectSelect.disabled = true;
             
             const response = await fetch('/api/subjects');
-            console.log('Response status:', response.status);
-            
             if (!response.ok) {
                 throw new Error(`Server responded with status ${response.status}`);
             }
-
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error(`Expected JSON but got ${contentType}`);
-            }
             
             const data = await response.json();
-            console.log('Subjects data:', data);
             
-            subjectSelect.innerHTML = '<option value="">Todas las Materias</option>';
-            if (data.subjects && data.subjects.length > 0) {
+            elements.subjectSelect.innerHTML = '<option value="">Todas las Materias</option>';
+            if (data.subjects?.length > 0) {
                 data.subjects.forEach(subject => {
                     const option = document.createElement('option');
                     option.value = subject;
                     option.textContent = subject === 'Espanol' ? 'Español' : 
                                        subject === 'Matematicas' ? 'Matemáticas' : 
                                        subject;
-                    subjectSelect.appendChild(option);
+                    elements.subjectSelect.appendChild(option);
                 });
-            } else {
-                console.warn('No subjects received from server');
             }
         } catch (error) {
             console.error('Error loading subjects:', error);
-            subjectSelect.innerHTML = '<option value="">Error al cargar materias</option>';
+            if (elements.subjectSelect) {
+                elements.subjectSelect.innerHTML = '<option value="">Error al cargar materias</option>';
+            }
         } finally {
-            subjectSelect.disabled = false;
+            if (elements.subjectSelect) {
+                elements.subjectSelect.disabled = false;
+            }
         }
     }
 
-    // Load topics when subject changes
-    subjectSelect.addEventListener('change', loadTopics);
-
-    // Search for questions when button is clicked
-    searchBtn.addEventListener('click', searchQuestions);
-
-    // Initial load of topics for selected subject
-    loadTopics();
-
     async function loadTopics() {
-        const subject = subjectSelect.value;
+        if (!elements.topicSelect || !elements.subjectSelect) return;
         
+        const subject = elements.subjectSelect.value;
         try {
-            topicSelect.innerHTML = '<option value="">Cargando temas...</option>';
-            topicSelect.disabled = true;
+            elements.topicSelect.innerHTML = '<option value="">Cargando temas...</option>';
+            elements.topicSelect.disabled = true;
             
             const queryParams = new URLSearchParams();
             if (subject) {
@@ -86,61 +126,121 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || 'Error al cargar los temas');
             }
             
-            topicSelect.innerHTML = '<option value="">Todos los Temas</option>';
-            if (data.topics && data.topics.length > 0) {
+            elements.topicSelect.innerHTML = '<option value="">Todos los Temas</option>';
+            if (data.topics?.length > 0) {
                 data.topics.forEach(topic => {
                     const option = document.createElement('option');
                     option.value = topic;
                     option.textContent = topic;
-                    topicSelect.appendChild(option);
+                    elements.topicSelect.appendChild(option);
                 });
             }
         } catch (error) {
             console.error('Error loading topics:', error);
-            topicSelect.innerHTML = '<option value="">Error al cargar temas</option>';
+            elements.topicSelect.innerHTML = '<option value="">Error al cargar temas</option>';
         } finally {
-            topicSelect.disabled = false;
+            elements.topicSelect.disabled = false;
         }
-    }
+    }    async function searchQuestions() {
+        // Define core required features and nice-to-have features
+        const coreFeatures = ['questionsContainer'];
+        const optionalFeatures = ['difficultySelection', 'quizComplete'];
+        
+        // Check core features
+        const missingCore = coreFeatures.filter(feature => !features[feature]);
+        if (missingCore.length > 0) {
+            console.error('Core features not available:', missingCore);
+            document.body.innerHTML = '<p class="error">Error: No se puede cargar el quiz. Faltan elementos esenciales.</p>';
+            return;
+        }
+        
+        // Log optional feature availability
+        const missingOptional = optionalFeatures.filter(feature => !features[feature]);
+        if (missingOptional.length > 0) {
+            console.warn('Some optional features not available:', missingOptional);
+        }        try {
+            // Safe element access with null checks
+            if (elements.loadingIndicator) {
+                elements.loadingIndicator.style.display = 'block';
+            }
+            if (elements.questionsContainer) {
+                elements.questionsContainer.innerHTML = '';
+            }
+            if (elements.searchBtn) {
+                elements.searchBtn.disabled = true;
+            }
+            if (elements.quizComplete) {
+                elements.quizComplete.style.display = 'none';
+            }            // Build query parameters with fallbacks for missing elements            // Build query parameters, only include non-empty values
+            const params = {};
+            if (elements.subjectSelect?.value) params.subject = elements.subjectSelect.value;
+            if (elements.topicSelect?.value) params.topic = elements.topicSelect.value;
+            if (elements.difficultySelect?.value) params.difficulty = elements.difficultySelect.value;
+            params.limit = '5';
 
-    async function searchQuestions() {
-        const subject = subjectSelect.value;
-        const topic = topicSelect.value;
-
-        try {
-            // Show loading indicator
-            loadingIndicator.style.display = 'block';
-            questionsContainer.innerHTML = '';
-            searchBtn.disabled = true;
-            
-            const queryParams = new URLSearchParams();
-            if (subject) queryParams.append('subject', subject);
-            if (topic) queryParams.append('topic', topic);
-
+            const queryParams = new URLSearchParams(params);
+            console.log('Query parameters:', Object.fromEntries(queryParams.entries()));console.log('Sending request with params:', queryParams.toString());
             const response = await fetch(`/api/questions?${queryParams}`);
+            console.log('Server response status:', response.status);
             const data = await response.json();
+            console.log('Server response data:', data);
+              // Log the full response details
+            console.log('Full response:', {
+                status: response.status,
+                statusText: response.statusText,
+                data: data,
+                headers: Object.fromEntries([...response.headers])
+            });
 
             if (!response.ok) {
-                throw new Error(data.error || 'Error al buscar preguntas');
+                throw new Error(data.error || `Error al buscar preguntas (${response.status}: ${response.statusText})`);
             }
 
-            if (!data.questions || data.questions.length === 0) {
-                questionsContainer.innerHTML = '<p class="no-results">No se encontraron preguntas</p>';
+            if (!data.questions?.length) {
+                console.log('No questions found in response');
+                showMessage('No se encontraron preguntas para los criterios seleccionados', 'no-results');
                 return;
             }
 
-            displayQuestions(data.questions);
-        } catch (error) {
+            displayQuestions(data.questions);        } catch (error) {
             console.error('Error searching questions:', error);
-            questionsContainer.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            // Provide more helpful error messages based on the error type
+            let errorMessage = error.message;
+            if (error.message.includes('Failed to fetch')) {
+                errorMessage = 'No se pudo conectar al servidor. Por favor verifica tu conexión.';
+            } else if (error.message.includes('404')) {
+                errorMessage = 'No se encontraron preguntas para los criterios seleccionados.';
+            }
+            showMessage(`Error: ${errorMessage}`, 'error');
         } finally {
-            loadingIndicator.style.display = 'none';
-            searchBtn.disabled = false;
+            // Reset UI state
+            if (elements.loadingIndicator) {
+                elements.loadingIndicator.style.display = 'none';
+            }
+            if (elements.searchBtn) {
+                elements.searchBtn.disabled = false;
+            }
+        }        function showMessage(message, className) {
+            const container = elements.questionsContainer || document.querySelector('.container') || document.body;
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message-container ${className}`;
+            messageDiv.innerHTML = `
+                <p class="message-text">${message}</p>
+                ${className === 'error' ? '<button onclick="location.reload()" class="retry-button">Intentar de nuevo</button>' : ''}
+            `;
+            
+            // Clear existing content if it's the questions container
+            if (container === elements.questionsContainer) {
+                container.innerHTML = '';
+            }
+            
+            container.appendChild(messageDiv);
         }
     }
 
     function displayQuestions(questions) {
-        // Reset score for new set of questions
+        if (!elements.questionsContainer) return;
+
         currentScore = 0;
         totalAnswered = 0;
         
@@ -149,13 +249,13 @@ document.addEventListener('DOMContentLoaded', () => {
         scoreDisplay.className = 'score-display';
         scoreDisplay.textContent = 'Puntuación: 0/0';
         
-        questionsContainer.innerHTML = '';
-        questionsContainer.appendChild(scoreDisplay);
+        elements.questionsContainer.innerHTML = '';
+        elements.questionsContainer.appendChild(scoreDisplay);
         
-        questions.forEach((q, qIndex) => {            const questionDiv = document.createElement('div');
+        questions.forEach((q, qIndex) => {
+            const questionDiv = document.createElement('div');
             questionDiv.className = 'question';
             
-            // Create elements individually for better control
             const title = document.createElement('h3');
             title.textContent = `Pregunta ${qIndex + 1}`;
             
@@ -164,8 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const optionsForm = document.createElement('form');
             optionsForm.className = 'options';
-            // Prevent form submission
-            optionsForm.addEventListener('submit', (e) => e.preventDefault());
+            optionsForm.addEventListener('submit', e => e.preventDefault());
             
             q.options.forEach((option, oIndex) => {
                 const optionDiv = document.createElement('div');
@@ -184,60 +283,156 @@ document.addEventListener('DOMContentLoaded', () => {
                 optionDiv.appendChild(input);
                 optionDiv.appendChild(label);
                 optionsForm.appendChild(optionDiv);
+                
+                input.addEventListener('change', () => handleAnswerSelection(q, oIndex));
             });
             
             questionDiv.appendChild(title);
             questionDiv.appendChild(questionText);
             questionDiv.appendChild(optionsForm);
-            questionsContainer.appendChild(questionDiv);
-
-            // Add keyboard navigation and event listeners
-            const optionsDiv = questionDiv.querySelector('.options');
-            const options = optionsDiv.querySelectorAll('input[type="radio"]');
-            
-            options.forEach((option, index) => {
-                option.addEventListener('change', (e) => {
-                    const selectedIndex = parseInt(e.target.value);
-                    const isCorrect = selectedIndex === q.correct_answer;
-                    
-                    // Remove previous result classes
-                    optionsDiv.querySelectorAll('.option').forEach(optionDiv => {
-                        optionDiv.classList.remove('correct', 'incorrect');
-                        optionDiv.querySelector('input').disabled = true;
-                    });
-
-                    // Add appropriate class to selected option
-                    const selectedOption = e.target.closest('.option');
-                    selectedOption.classList.add(isCorrect ? 'correct' : 'incorrect');
-
-                    // Show correct answer if wrong
-                    if (!isCorrect) {
-                        optionsDiv.querySelectorAll('.option')[q.correct_answer]
-                            .classList.add('correct');
-                    }
-
-                    // Update score
-                    totalAnswered++;
-                    if (isCorrect) currentScore++;
-                    
-                    // Update score display
-                    const scorePercentage = Math.round((currentScore / totalAnswered) * 100);
-                    scoreDisplay.textContent = `Puntuación: ${currentScore}/${totalAnswered} (${scorePercentage}%)`;
-                });
-
-                // Add keyboard navigation
-                option.addEventListener('keydown', (e) => {
-                    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-                        e.preventDefault();
-                        const nextInput = options[index + 1] || options[0];
-                        nextInput.focus();
-                    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-                        e.preventDefault();
-                        const prevInput = options[index - 1] || options[options.length - 1];
-                        prevInput.focus();
-                    }
-                });
-            });
+            elements.questionsContainer.appendChild(questionDiv);
         });
+    }
+
+    function handleAnswerSelection(question, selectedIndex) {
+        const isCorrect = selectedIndex === question.correct_answer;
+        const questionDiv = document.querySelector(`input[name="q${question.id}"]`).closest('.question');
+        const options = questionDiv.querySelectorAll('input[type="radio"]');
+        
+        // Disable all options
+        options.forEach(opt => opt.disabled = true);
+        
+        // Update score
+        if (isCorrect) currentScore++;
+        totalAnswered++;
+        
+        // Update score display
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        if (scoreDisplay) {
+            scoreDisplay.textContent = `Puntuación: ${currentScore}/${totalAnswered}`;
+        }
+        
+        // Visual feedback
+        const allOptionDivs = questionDiv.querySelectorAll('.option');
+        allOptionDivs.forEach((div, idx) => {
+            if (idx === question.correct_answer) {
+                div.classList.add('correct');
+            } else if (idx === selectedIndex && !isCorrect) {
+                div.classList.add('incorrect');
+            }
+        });
+        
+        // Check if quiz is complete
+        if (totalAnswered === 5) {
+            showQuizCompletion();
+        }
+    }    function showQuizCompletion() {
+        const scorePercentage = (currentScore / 5) * 100;
+
+        // Basic completion message if quiz completion feature is not available
+        if (!features.quizComplete) {
+            elements.questionsContainer.insertAdjacentHTML('beforeend', `
+                <div class="quiz-complete-basic">
+                    <h2>Quiz Completado</h2>
+                    <p>Puntuación final: ${currentScore}/5 (${scorePercentage}%)</p>
+                    <button onclick="window.location.reload()">Nuevo Quiz</button>
+                </div>
+            `);
+            return;
+        }
+
+        // Full completion display
+        elements.quizComplete.style.display = 'block';
+        
+        // Score display
+        if (features.scoreDisplay) {
+            if (elements.completionMessage) {
+                elements.completionMessage.textContent = scorePercentage >= 80 ? 
+                    '¡Felicitaciones!' : '¡Sigue practicando!';
+            }
+            
+            if (elements.finalScore) {
+                elements.finalScore.textContent = `Puntuación final: ${currentScore}/5 (${scorePercentage}%)`;
+            }
+        }
+
+        // Difficulty recommendation
+        if (features.difficultyRecommendation && features.difficultySelection) {
+            let nextDifficulty;
+            const currentDifficulty = elements.difficultySelect.value;
+
+            if (scorePercentage >= 80) {
+                if (currentDifficulty !== 'hard') {
+                    nextDifficulty = currentDifficulty === 'easy' ? 'medium' : 'hard';
+                    elements.difficultyRecommendation.textContent = 
+                        `¡Buen trabajo! Intenta el siguiente quiz en dificultad ${nextDifficulty === 'medium' ? 'media' : 'difícil'}.`;
+                } else {
+                    elements.difficultyRecommendation.textContent = '¡Excelente! Has dominado el nivel difícil.';
+                }
+            } else {
+                if (currentDifficulty !== 'easy') {
+                    nextDifficulty = currentDifficulty === 'hard' ? 'medium' : 'easy';
+                    elements.difficultyRecommendation.textContent = 
+                        `Intenta practicar más en dificultad ${nextDifficulty === 'medium' ? 'media' : 'fácil'}.`;
+                } else {
+                    elements.difficultyRecommendation.textContent = 'Sigue practicando en este nivel para mejorar.';
+                }
+            }
+            
+            if (nextDifficulty) {
+                elements.difficultySelect.value = nextDifficulty;
+            }
+        }
+    }
+
+    // Add event listeners based on available features
+    function setupEventListeners() {
+        // Subject selection
+        if (features.subjectSelection) {
+            elements.subjectSelect.addEventListener('change', () => {
+                if (features.topicSelection) {
+                    loadTopics();
+                }
+            });
+        }
+
+        // Quiz start
+        if (features.quizStart && elements.searchBtn) {
+            elements.searchBtn.addEventListener('click', searchQuestions);
+        }
+
+        // New quiz button
+        if (features.quizComplete && elements.newQuizBtn) {
+            elements.newQuizBtn.addEventListener('click', () => {
+                currentScore = 0;
+                totalAnswered = 0;
+                if (elements.questionsContainer) {
+                    elements.questionsContainer.innerHTML = '';
+                }
+                if (elements.quizComplete) {
+                    elements.quizComplete.style.display = 'none';
+                }
+                searchQuestions();
+            });
+        }
+    }
+
+    // Initialize tooltips for missing features
+    function setupTooltips() {
+        if (!features.difficultySelection && elements.questionsContainer) {
+            const notice = document.createElement('div');
+            notice.className = 'feature-notice';
+            notice.textContent = 'La selección de dificultad no está disponible. Usando dificultad media por defecto.';
+            elements.questionsContainer.insertAdjacentElement('beforebegin', notice);
+        }
+    }
+
+    // Call initialization functions
+    setupEventListeners();
+    setupTooltips();
+
+    // Initial load if subject selection is available
+    if (features.subjectSelection) {
+        loadSubjects();
     }
 });

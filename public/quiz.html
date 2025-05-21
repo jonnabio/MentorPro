@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MentorPro Quiz</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>MentorPro Quiz</h1>
+        
+        <div class="quiz-setup">
+            <div class="form-group">
+                <label for="subjectSelect">Materia:</label>
+                <select id="subjectSelect">
+                    <option value="">Todas las Materias</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="topicSelect">Tema:</label>
+                <select id="topicSelect">
+                    <option value="">Todos los Temas</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="difficultySelect">Dificultad:</label>
+                <select id="difficultySelect">
+                    <option value="medium">Media</option>
+                    <option value="easy">Fácil</option>
+                    <option value="hard">Difícil</option>
+                </select>
+            </div>
+
+            <button id="searchBtn" class="primary-button">Comenzar Quiz</button>
+        </div>
+
+        <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+            Cargando preguntas...
+        </div>
+
+        <div id="questionsContainer" class="questions-container"></div>
+
+        <div id="quizComplete" class="quiz-complete" style="display: none;">
+            <h2 id="completionMessage"></h2>
+            <p id="finalScore"></p>
+            <p id="difficultyRecommendation"></p>
+            <button id="newQuizBtn" class="primary-button">Comenzar Nuevo Quiz</button>
+        </div>
+    </div>
+    <script src="quiz.js"></script>
+</body>
+</html>
