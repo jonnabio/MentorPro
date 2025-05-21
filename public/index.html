@@ -13,10 +13,19 @@
 
         <h1>MentorPro</h1>
         
-        <div class="quiz-controls">
-            <div class="select-container">
+        <div class="quiz-controls">            <div class="select-container">
                 <label for="subjectSelect">Materia:</label>                <select id="subjectSelect">
                     <option value="">Cargando materias...</option>
+                </select>
+            </div>
+
+            <div class="select-container">
+                <label for="difficultySelect">Dificultad:</label>
+                <select id="difficultySelect">
+                    <option value="">Todas las Dificultades</option>
+                    <option value="easy">Fácil</option>
+                    <option value="medium">Media</option>
+                    <option value="hard">Difícil</option>
                 </select>
             </div>
 
@@ -32,12 +41,17 @@
 
         <div id="loadingIndicator" class="loading" style="display: none;">
             Cargando preguntas...
-        </div>
+        </div>            <div id="questionsContainer" class="questions-container">
+                <!-- Questions will be displayed here -->
+            </div>
 
-        <div id="questionsContainer" class="questions-container">
-            <!-- Questions will be displayed here -->
+            <div id="quizComplete" class="quiz-complete" style="display: none;">
+                <h2 id="completionMessage"></h2>
+                <p id="finalScore"></p>
+                <p id="difficultyRecommendation"></p>
+                <button id="newQuizBtn" class="primary-button">Comenzar Nuevo Quiz</button>
+            </div>
         </div>
-    </div>
-    <script src="quiz.js"></script>
-</body>
+        <script src="quiz.js"></script>
+    </body>
 </html>
