@@ -377,11 +377,10 @@ app.get('/api/questions', async (req, res) => {
         });
         throw new Error('Error interno al procesar las preguntas');
       }
-    });
-
+    });    // Return empty array instead of 404 when no questions found
     if (questions.length === 0) {
-      return res.status(404).json({ 
-        error: 'No se encontraron preguntas',
+      return res.status(200).json({ 
+        message: 'No se encontraron preguntas',
         questions: []
       });
     }

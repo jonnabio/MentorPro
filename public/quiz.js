@@ -194,24 +194,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) {
                 throw new Error(data.error || `Error al buscar preguntas (${response.status}: ${response.statusText})`);
-            }
-
-            if (!data.questions?.length) {
+            }            if (!data.questions?.length) {
                 console.log('No questions found in response');
-                showMessage('No se encontraron preguntas para los criterios seleccionados', 'no-results');
+                showMessage('No se encontraron preguntas para los criterios seleccionados. Intenta con otros criterios o genera nuevas preguntas usando el botón "Generar".', 'info');
                 return;
             }
 
-            displayQuestions(data.questions);        } catch (error) {
-            console.error('Error searching questions:', error);
+            displayQuestions(data.questions);
+        } catch (error) {
+            // Only log as error if it's not a normal "no questions" response
+            if (!error.message.includes('No se encontraron preguntas')) {
+                console.error('Error searching questions:', error);
+            } else {
+                console.log('Search completed with no results:', error.message);
+            }
+            
             // Provide more helpful error messages based on the error type
             let errorMessage = error.message;
             if (error.message.includes('Failed to fetch')) {
                 errorMessage = 'No se pudo conectar al servidor. Por favor verifica tu conexión.';
             } else if (error.message.includes('404')) {
-                errorMessage = 'No se encontraron preguntas para los criterios seleccionados.';
+                errorMessage = 'No se encontraron preguntas para los criterios seleccionados. Puedes generar nuevas preguntas usando el botón "Generar".';
             }
-            showMessage(`Error: ${errorMessage}`, 'error');
+            showMessage(errorMessage, error.message.includes('No se encontraron preguntas') ? 'info' : 'error');
         } finally {
             // Reset UI state
             if (elements.loadingIndicator) {
@@ -224,9 +229,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const container = elements.questionsContainer || document.querySelector('.container') || document.body;
             const messageDiv = document.createElement('div');
             messageDiv.className = `message-container ${className}`;
+            
+            // Different message styles based on type
+            const iconMap = {
+                'error': '❌',
+                'info': 'ℹ️',
+                'no-results': '🔍'
+            };
+
             messageDiv.innerHTML = `
-                <p class="message-text">${message}</p>
-                ${className === 'error' ? '<button onclick="location.reload()" class="retry-button">Intentar de nuevo</button>' : ''}
+                <div class="message-content">
+                    <span class="message-icon">${iconMap[className] || 'ℹ️'}</span>
+                    <p class="message-text">${message}</p>
+                    ${className === 'no-results' ? `
+                        <div class="message-actions">
+                            <button onclick="location.reload()" class="action-button">Intentar con otros criterios</button>
+                        </div>
+                    ` : ''}
+                </div>
             `;
             
             // Clear existing content if it's the questions container

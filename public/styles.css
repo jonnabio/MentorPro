@@ -415,10 +415,51 @@ button:disabled {
 }
 
 .message-container {
-    padding: 15px;
-    margin: 10px 0;
-    border-radius: 4px;
+    margin: 20px auto;
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 600px;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.message-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.message-icon {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.message-text {
     text-align: center;
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.message-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.action-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.action-button:hover {
+    background-color: #0056b3;
 }
 
 .message-container.error {
@@ -427,28 +468,19 @@ button:disabled {
     color: #c53030;
 }
 
-.message-container.no-results {
+.message-container.info {
     background-color: #ebf8ff;
-    border: 1px solid #bee3f8;
+    border: 1px solid #90cdf4;
     color: #2b6cb0;
 }
 
-.message-text {
-    margin-bottom: 10px;
-    font-size: 16px;
+.message-container.no-results {
+    background-color: #f7fafc;
+    border: 1px solid #e2e8f0;
+    color: #2d3748;
 }
 
-.retry-button {
-    background-color: #e53e3e;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s;
-}
-
-.retry-button:hover {
-    background-color: #c53030;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
