@@ -59,6 +59,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasScoreDisplay = initializeFeature('scoreDisplay', ['completionMessage', 'finalScore']);
     const hasDifficultyRecommendation = initializeFeature('difficultyRecommendation', ['difficultyRecommendation']);
 
+    // Add event listener for new quiz button
+    if (elements.newQuizBtn) {
+        elements.newQuizBtn.addEventListener('click', () => {
+            // Reset everything and start over
+            currentScore = 0;
+            totalAnswered = 0;
+            if (elements.quizComplete) {
+                elements.quizComplete.style.display = 'none';
+            }
+            if (elements.questionsContainer) {
+                elements.questionsContainer.innerHTML = '';
+            }
+            searchQuestions();
+        });
+    }
+
     // Log feature availability
     console.log('Features initialized:', features);
 
@@ -85,11 +101,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             elements.subjectSelect.innerHTML = '<option value="">Todas las Materias</option>';
             if (data.subjects?.length > 0) {
-                data.subjects.forEach(subject => {
-                    const option = document.createElement('option');
+                data.subjects.forEach(subject => {                    const option = document.createElement('option');
                     option.value = subject;
                     option.textContent = subject === 'Espanol' ? 'Español' : 
                                        subject === 'Matematicas' ? 'Matemáticas' : 
+                                       subject === 'Social Studies' ? 'Estudios Sociales' :
                                        subject;
                     elements.subjectSelect.appendChild(option);
                 });
@@ -347,61 +363,76 @@ document.addEventListener('DOMContentLoaded', () => {
             showQuizCompletion();
         }
     }    function showQuizCompletion() {
+        console.log('Showing quiz completion with features:', features);
         const scorePercentage = (currentScore / 5) * 100;
-
-        // Basic completion message if quiz completion feature is not available
-        if (!features.quizComplete) {
-            elements.questionsContainer.insertAdjacentHTML('beforeend', `
-                <div class="quiz-complete-basic">
-                    <h2>Quiz Completado</h2>
-                    <p>Puntuación final: ${currentScore}/5 (${scorePercentage}%)</p>
-                    <button onclick="window.location.reload()">Nuevo Quiz</button>
-                </div>
-            `);
+        
+        // Check if questionsContainer exists before attempting to modify it
+        if (!elements.questionsContainer) {
+            console.error('Questions container not found');
             return;
         }
 
-        // Full completion display
-        elements.quizComplete.style.display = 'block';
-        
-        // Score display
-        if (features.scoreDisplay) {
+        // Ensure the quiz completion section is cleared
+        if (elements.quizComplete) {
+            elements.quizComplete.style.display = 'none';
+        }
+
+        // Use the appropriate container based on feature availability
+        const completionContainer = elements.quizComplete || elements.questionsContainer;
+
+        if (features.quizComplete && elements.quizComplete && elements.newQuizBtn) {
+            console.log('Using full quiz completion display');
+            elements.quizComplete.style.display = 'block';
+            
+            // Set up the completion message
             if (elements.completionMessage) {
                 elements.completionMessage.textContent = scorePercentage >= 80 ? 
                     '¡Felicitaciones!' : '¡Sigue practicando!';
             }
             
+            // Set up the score display
             if (elements.finalScore) {
                 elements.finalScore.textContent = `Puntuación final: ${currentScore}/5 (${scorePercentage}%)`;
             }
-        }
-
-        // Difficulty recommendation
-        if (features.difficultyRecommendation && features.difficultySelection) {
-            let nextDifficulty;
-            const currentDifficulty = elements.difficultySelect.value;
-
-            if (scorePercentage >= 80) {
-                if (currentDifficulty !== 'hard') {
-                    nextDifficulty = currentDifficulty === 'easy' ? 'medium' : 'hard';
-                    elements.difficultyRecommendation.textContent = 
-                        `¡Buen trabajo! Intenta el siguiente quiz en dificultad ${nextDifficulty === 'medium' ? 'media' : 'difícil'}.`;
-                } else {
-                    elements.difficultyRecommendation.textContent = '¡Excelente! Has dominado el nivel difícil.';
-                }
-            } else {
-                if (currentDifficulty !== 'easy') {
-                    nextDifficulty = currentDifficulty === 'hard' ? 'medium' : 'easy';
-                    elements.difficultyRecommendation.textContent = 
-                        `Intenta practicar más en dificultad ${nextDifficulty === 'medium' ? 'media' : 'fácil'}.`;
-                } else {
-                    elements.difficultyRecommendation.textContent = 'Sigue practicando en este nivel para mejorar.';
-                }
-            }
             
-            if (nextDifficulty) {
-                elements.difficultySelect.value = nextDifficulty;
+            // Set up the difficulty recommendation
+            if (elements.difficultyRecommendation && elements.difficultySelect) {
+                const currentDifficulty = elements.difficultySelect.value;
+                let nextDifficulty = '';
+                
+                if (scorePercentage >= 80) {
+                    if (currentDifficulty !== 'hard') {                        nextDifficulty = currentDifficulty === 'easy' ? 'medium' : 'hard';
+                        elements.difficultyRecommendation.textContent = 
+                            `¡Buen trabajo! Intenta el siguiente quiz en nivel ${nextDifficulty === 'medium' ? 'Intermedio' : 'Avanzado'}.`;
+                    } else {
+                        elements.difficultyRecommendation.textContent = '¡Excelente! Has dominado el nivel difícil.';
+                    }
+                } else {
+                    if (currentDifficulty !== 'easy') {
+                        nextDifficulty = currentDifficulty === 'hard' ? 'medium' : 'easy';                        elements.difficultyRecommendation.textContent = 
+                            `Intenta practicar más en nivel ${nextDifficulty === 'medium' ? 'Intermedio' : 'Principiante'}.`;
+                    } else {
+                        elements.difficultyRecommendation.textContent = 'Sigue practicando en este nivel para mejorar.';
+                    }
+                }
+                
+                // Update difficulty for next quiz if recommended
+                if (nextDifficulty && elements.difficultySelect) {
+                    elements.difficultySelect.value = nextDifficulty;
+                }
             }
+        } else {
+            // Fallback to basic completion message
+            console.log('Using basic quiz completion display');
+            const basicCompletionHtml = `
+                <div class="quiz-complete-basic">
+                    <h2>Quiz Completado</h2>
+                    <p>Puntuación final: ${currentScore}/5 (${scorePercentage}%)</p>
+                    <button onclick="window.location.reload()" class="primary-button">Nuevo Quiz</button>
+                </div>
+            `;
+            
+            elements.questionsContainer.insertAdjacentHTML('beforeend', basicCompletionHtml);
         }
     }
 

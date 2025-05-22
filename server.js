@@ -44,10 +44,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static('public'));
 
-// Initialize database
+// Initialize database - only create table if it doesn't exist
 db.exec(`
-  DROP TABLE IF EXISTS questions;
-  CREATE TABLE questions (
+  CREATE TABLE IF NOT EXISTS questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subject TEXT,
     topic TEXT,
@@ -229,6 +228,32 @@ async function generateQuestions(description, classification, difficulty = 'medi
   }
 }
 
+// Add helper functions for difficulty conversion
+function normalizeSubject(subject) {
+  if (subject === 'Social Studies') return 'Estudios Sociales';
+  if (subject === 'Espanol') return 'Español';
+  if (subject === 'Matematicas') return 'Matemáticas';
+  return subject;
+}
+
+function displayDifficulty(dbDifficulty) {
+  const mapping = {
+    'easy': 'Principiante',
+    'medium': 'Intermedio',
+    'hard': 'Avanzado'
+  };
+  return mapping[dbDifficulty] || dbDifficulty;
+}
+
+function normalizeDifficulty(displayDifficulty) {
+  const mapping = {
+    'Principiante': 'easy',
+    'Intermedio': 'medium',
+    'Avanzado': 'hard'
+  };
+  return mapping[displayDifficulty] || displayDifficulty;
+}
+
 // API Endpoints
 app.post('/api/generate', async (req, res) => {
   try {
@@ -315,7 +340,7 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-// Add endpoint to query questions
+// Update the /api/questions endpoint to use the display conversions
 app.get('/api/questions', async (req, res) => {
   try {
     const { subject, topic, difficulty, limit } = req.query;
@@ -334,7 +359,7 @@ app.get('/api/questions', async (req, res) => {
     }
     if (difficulty) {
       conditions.push('difficulty = ?');
-      params.push(difficulty);
+      params.push(normalizeDifficulty(difficulty));
     }
 
     if (conditions.length > 0) {
@@ -357,17 +382,14 @@ app.get('/api/questions', async (req, res) => {
     const stmt = db.prepare(query);
     let questions = stmt.all(...params);
 
-    console.log('Query results:', {
-      count: questions.length,
-      first: questions[0]
-    });
-
-    // Parse the options JSON string for each question
+    // Parse the options JSON string and convert difficulties for each question
     questions = questions.map(q => {
       try {
         return {
           ...q,
-          options: JSON.parse(q.options)
+          options: JSON.parse(q.options),
+          difficulty: displayDifficulty(q.difficulty),
+          subject: normalizeSubject(q.subject)
         };
       } catch (e) {
         console.error('Error parsing options for question:', {
@@ -392,11 +414,21 @@ app.get('/api/questions', async (req, res) => {
   }
 });
 
-// Add endpoint to get subjects
+// Add endpoint to get subjects from the database
 app.get('/api/subjects', async (req, res) => {
   try {
-    const validSubjects = ['Espanol', 'Matematicas', 'Ciencias', 'Social Studies'];
-    res.json({ subjects: validSubjects });
+    // Query the database for unique subjects
+    const stmt = db.prepare('SELECT DISTINCT subject FROM questions ORDER BY subject');
+    const subjects = stmt.all().map(row => row.subject);
+
+    // If no subjects found in the database, provide default subjects
+    if (!subjects || subjects.length === 0) {
+      const defaultSubjects = ['Espanol', 'Matematicas', 'Ciencias', 'Social Studies'];
+      res.json({ subjects: defaultSubjects });
+      return;
+    }
+
+    res.json({ subjects });
   } catch (error) {
     console.error('Error fetching subjects:', error);
     res.status(500).json({ 
@@ -460,7 +492,7 @@ app.patch('/api/questions/:id', async (req, res) => {
     });
 
     const { id } = req.params;
-    const { question, options, correctAnswer, subject, topic } = req.body;
+    const { question, options, correctAnswer, subject, topic, difficulty } = req.body;
     
     // Set JSON content type
     res.setHeader('Content-Type', 'application/json');
@@ -478,9 +510,12 @@ app.patch('/api/questions/:id', async (req, res) => {
       return res.status(400).json({ error: 'La respuesta correcta debe ser un número entre 0 y 3' });
     }
 
+    // Normalize the difficulty value if provided
+    const dbDifficulty = difficulty ? normalizeDifficulty(difficulty) : 'medium';
+
     const stmt = db.prepare(`
       UPDATE questions 
-      SET question = ?, options = ?, correct_answer = ?, subject = ?, topic = ?
+      SET question = ?, options = ?, correct_answer = ?, subject = ?, topic = ?, difficulty = ?
       WHERE id = ?
     `);
 
@@ -490,6 +525,7 @@ app.patch('/api/questions/:id', async (req, res) => {
       correctAnswer,
       subject,
       topic,
+      dbDifficulty,
       id
     );
 
@@ -497,8 +533,11 @@ app.patch('/api/questions/:id', async (req, res) => {
       return res.status(404).json({ error: 'Pregunta no encontrada' });
     }
 
+    // Return the updated question with converted display values
     const updatedQuestion = db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
     updatedQuestion.options = JSON.parse(updatedQuestion.options);
+    updatedQuestion.difficulty = displayDifficulty(updatedQuestion.difficulty);
+    updatedQuestion.subject = normalizeSubject(updatedQuestion.subject);
     
     res.json({ question: updatedQuestion });
   } catch (error) {

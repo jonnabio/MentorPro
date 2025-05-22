@@ -3,7 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const generateBtn = document.getElementById('generateBtn');
     const questionsContainer = document.getElementById('questionsContainer');
 
-    // Initial load of topics
+    // Initial load of subjects and topics
+    loadSubjects();
     loadTopics();
 
     generateBtn.addEventListener('click', async () => {
@@ -39,6 +40,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// Load subjects from the database
+async function loadSubjects() {
+    const subjectSelect = document.getElementById('searchSubject');
+    
+    try {
+        subjectSelect.innerHTML = '<option value="">Cargando materias...</option>';
+        subjectSelect.disabled = true;
+        
+        const response = await fetch('/api/subjects');
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al cargar las materias');
+        }
+        
+        subjectSelect.innerHTML = '<option value="">Todas las Materias</option>';
+        if (data.subjects?.length > 0) {
+            data.subjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject;
+                option.textContent = subject === 'Espanol' ? 'Español' : 
+                                   subject === 'Matematicas' ? 'Matemáticas' :
+                                   subject === 'Social Studies' ? 'Estudios Sociales' :
+                                   subject;
+                subjectSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading subjects:', error);
+        subjectSelect.innerHTML = '<option value="">Error al cargar materias</option>';
+    } finally {
+        subjectSelect.disabled = false;
+    }
+}
 
 // Load topics based on selected subject
 async function loadTopics() {
