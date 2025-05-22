@@ -129,47 +129,67 @@ async function generateQuestions(description, classification) {
   while (retries < maxRetries) {
     try {
       console.log(`Generating questions for all difficulty levels (Attempt ${retries + 1}/${maxRetries})`);
-      
-      const messages = [
+        const messages = [
         {
           role: "system",
-          content: `Eres un experto en generación de preguntas educativas. 
-                   Tu tarea es crear EXACTAMENTE 9 preguntas en español: 
-                   3 de nivel Principiante (easy)
-                   3 de nivel Intermedio (medium)
-                   3 de nivel Avanzado (hard)`
+          content: `Eres un sistema especializado en la generación de preguntas educativas en formato JSON.
+REGLAS ESTRICTAS:
+1. Genera EXACTAMENTE 9 preguntas en español
+2. SIEMPRE responde con un objeto JSON válido, sin texto adicional
+3. NUNCA incluyas comentarios dentro del JSON
+4. Usa SOLAMENTE comillas dobles para strings
+5. NO uses caracteres especiales ni tildes en subject/difficulty
+6. Los números NO deben tener comillas
+7. Sigue EXACTAMENTE la estructura del ejemplo proporcionado
+
+DISTRIBUCIÓN OBLIGATORIA:
+- 3 preguntas "difficulty": "easy"
+- 3 preguntas "difficulty": "medium"
+- 3 preguntas "difficulty": "hard"`
         },
         {
           role: "user",
-          content: `Genera 9 preguntas de opción múltiple en español con esta distribución:
+          content: `Genera un objeto JSON con 9 preguntas de opción múltiple en español.
 
-          Materia: ${classification.subject}
-          Tema: ${classification.topic}
-          Descripción: ${description}
+PARÁMETROS:
+Materia: ${classification.subject}
+Tema: ${classification.topic}
+Descripción: ${description}
 
-          REQUISITOS:
-          - 3 preguntas de nivel Principiante (easy): conceptos básicos y directos
-          - 3 preguntas de nivel Intermedio (medium): comprensión moderada
-          - 3 preguntas de nivel Avanzado (hard): pensamiento crítico
+ESTRUCTURA JSON REQUERIDA:
+{
+  "questions": [
+    {
+      "subject": "Espanol",
+      "topic": "Verbos",
+      "question": "¿Cuál es el tiempo verbal correcto en la oración 'Ayer ___ al parque'?",
+      "options": ["fui", "iré", "voy", "iba"],
+      "correctAnswer": 0,
+      "difficulty": "easy"
+    }
+  ]
+}
 
-          Responde ÚNICAMENTE con un objeto JSON válido que contenga un array de 9 preguntas.
-          El formato JSON DEBE ser EXACTAMENTE el siguiente, sin texto adicional antes ni después:
-          {
-            "questions": [
-              {
-                "subject": "string (ej: Espanol)",
-                "topic": "string (ej: Palabras homofonas)",
-                "question": "string (texto de la pregunta)",
-                "options": ["string (opción 1)", "string (opción 2)", "string (opción 3)", "string (opción 4)"],
-                "correctAnswer": "number (0, 1, 2, o 3)",
-                "difficulty": "string (easy, medium, o hard)"
-              }
-              // ... 8 preguntas más siguiendo el mismo formato ...
-            ]
-          }
-          Asegúrate de que todas las claves y valores string estén entre comillas dobles y que los números no tengan comillas.
-          Verifica que haya exactamente 3 preguntas para cada nivel de dificultad (easy, medium, hard).
-          `
+VALIDACIÓN REQUERIDA:
+1. DEBE contener array "questions" con EXACTAMENTE 9 preguntas
+2. Cada pregunta DEBE tener:
+   - "subject": string (exactamente como se provee en Parámetros)
+   - "topic": string (relacionado al tema proporcionado)
+   - "question": string (pregunta clara en español)
+   - "options": array con EXACTAMENTE 4 strings
+   - "correctAnswer": número entre 0 y 3
+   - "difficulty": string ("easy", "medium", o "hard")
+3. DEBE haber EXACTAMENTE:
+   - 3 preguntas con "difficulty": "easy"
+   - 3 preguntas con "difficulty": "medium"
+   - 3 preguntas con "difficulty": "hard"
+
+NIVELES DE DIFICULTAD:
+- easy: Conceptos básicos, preguntas directas, vocabulario simple
+- medium: Comprensión moderada, aplicación de conceptos
+- hard: Pensamiento crítico, análisis complejo, casos prácticos
+
+NO incluyas comentarios, texto explicativo, ni caracteres adicionales fuera del objeto JSON.`
         }
       ];
 
