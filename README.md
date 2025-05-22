@@ -2,6 +2,37 @@
 
 MentorPro is an interactive quiz generation and management system designed for educational purposes. It uses AI to automatically generate multiple-choice questions based on learning objectives, making it ideal for teachers and educational institutions.
 
+## Latest Updates and Improvements
+
+### Enhanced Error Handling & Reliability
+- Comprehensive error handling for OpenAI API interactions with specific error messages
+- Robust retry mechanism for AI question generation with up to 3 attempts
+- Improved database connection error handling
+- Better validation of AI responses and data structures
+
+### AI Question Generation Improvements
+- Strict validation of generated questions format and content
+- Enforcement of exact distribution of difficulty levels (3 easy, 3 medium, 3 hard)
+- Enhanced subject classification with standardized categories
+- Response format validation and automatic correction
+- Rate limit handling for OpenAI API calls
+
+### UI/UX Enhancements
+- Modern dark mode theme with CSS variables
+- Improved loading states and error messages
+- Dynamic feature availability detection
+- Smooth animations and transitions
+- Better responsive design
+- Comprehensive user feedback system
+- Adaptive difficulty recommendations based on performance
+
+### Data Management
+- Normalized difficulty levels in database (easy, medium, hard)
+- Standardized subject names without special characters
+- Improved search and filtering capabilities
+- Dynamic topic management based on subjects
+- Automatic question randomization for quizzes
+
 ## Features
 
 - AI-powered question generation
@@ -12,19 +43,26 @@ MentorPro is an interactive quiz generation and management system designed for e
 - Admin panel for question management
 - Real-time scoring and feedback
 - Difficulty level recommendations based on performance
+- Feature detection and graceful degradation
+- Advanced error handling and recovery
 
 ## Tech Stack
 
 ### Backend
 - Node.js
-- Express.js
-- SQLite (using better-sqlite3)
-- OpenAI API (GPT-3.5 Turbo)
+- Express.js with improved error handling
+- SQLite (using better-sqlite3) with optimized queries
+- OpenAI API (GPT-3.5 Turbo) with retry mechanism
 
 ### Frontend
-- Vanilla JavaScript
-- HTML5
-- CSS3 (with CSS Variables for theming)
+- Vanilla JavaScript with modern ES6+ features
+- HTML5 with semantic markup
+- CSS3 with modern features:
+  - CSS Variables for theming
+  - Flexbox for layouts
+  - CSS Grid for responsive design
+  - CSS Animations
+- Progressive enhancement and feature detection
 
 ### Development Tools
 - dotenv for environment management
@@ -113,6 +151,9 @@ CREATE TABLE questions (
    - User inputs a learning objective
    - OpenAI analyzes and classifies the subject and topic
    - Validates against predefined subject categories
+   - Multiple retry attempts with exponential backoff
+   - Comprehensive error handling and validation
+   - Logging and monitoring of classification process
 
 2. **Question Generation**
    - AI generates multiple-choice questions based on:
@@ -139,10 +180,13 @@ CREATE TABLE questions (
    - Randomized question selection
 
 2. **Quiz Flow**
-   - 5 questions per quiz
-   - Immediate feedback on answers
+   - 9 questions per quiz (3 of each difficulty level)
+   - Immediate feedback on answers with animations
    - Visual indication of correct/incorrect answers
-   - Running score display
+   - Running score display with real-time updates
+   - Progress tracking and statistics
+   - Smooth transitions between questions
+   - Error recovery and state management
 
 3. **Completion**
    - Final score display
@@ -153,9 +197,12 @@ CREATE TABLE questions (
 ### Admin Interface
 
 1. **Question Generation**
-   - Learning objective input
-   - AI-powered generation
-   - Preview generated questions
+   - Learning objective input with validation
+   - AI-powered generation with retry mechanism
+   - Preview generated questions with validation
+   - Real-time error feedback and suggestions
+   - Progress indicators and loading states
+   - Automatic classification and categorization
 
 2. **Question Management**
    - Search existing questions
