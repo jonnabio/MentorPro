@@ -121,111 +121,146 @@ async function classifyDescription(description) {  const classificationPrompt = 
   }
 }
 
-// Generate questions using OpenAI
-async function generateQuestions(description, classification, difficulty = 'medium') {
-  try {
-    const difficultyInstructions = {
-      easy: "Las preguntas deben ser básicas, usando conceptos simples y respuestas directas.",
-      medium: "Las preguntas deben requerir un entendimiento básico de los conceptos.",
-      hard: "Las preguntas deben requerir pensamiento crítico y aplicación de conceptos."
-    };
+// Generate questions using OpenAI with retry mechanism
+async function generateQuestions(description, classification) {
+  const maxRetries = 3;
+  let retries = 0;
 
-    const questionPrompt = `
-      Genera 3 preguntas de opción múltiple en español para la siguiente materia y tema. 
-      Las preguntas deben ser apropiadas para estudiantes de primaria.
-      
-      Materia: ${classification.subject}
-      Tema: ${classification.topic}
-      Descripción: ${description}
-      Dificultad: ${difficulty}
-      
-      Instrucciones de dificultad: ${difficultyInstructions[difficulty]}
-      
-      IMPORTANTE: La respuesta debe ser un objeto JSON válido con este formato exacto.
-      Todas las propiedades deben estar entre comillas dobles.
-      El valor de correctAnswer debe ser un número del 0 al 3 sin comillas.
-      
-      {
-        "questions": [
-          {
-            "subject": "${classification.subject}",
-            "topic": "${classification.topic}",
-            "question": "pregunta aquí",
-            "options": ["opción 1", "opción 2", "opción 3", "opción 4"],
-            "correctAnswer": 0,
-            "difficulty": "${difficulty}"
-          }
-        ]
-      }
-      
-      No incluyas ningún texto adicional antes o después del JSON.
-    `;    console.log('Sending question generation request to OpenAI...');
-    const completion = await openai.chat.completions.create({
-      messages: [{ role: "user", content: questionPrompt }],
-      model: "gpt-3.5-turbo",
-      temperature: 0.5,
-    });
-      console.log('Raw GPT response:', completion.choices[0].message.content);
-
-    // Validate that we have a response and it has content
-    if (!completion.choices || !completion.choices[0] || !completion.choices[0].message) {
-      throw new Error('Invalid response structure from OpenAI');
-    }
-
-    const content = completion.choices[0].message.content.trim();
-    console.log('Attempting to parse response:', content);
-
+  while (retries < maxRetries) {
     try {
-      const parsedResponse = JSON.parse(content);
+      console.log(`Generating questions for all difficulty levels (Attempt ${retries + 1}/${maxRetries})`);
       
-      // Validate response structure
-      if (!parsedResponse.questions || !Array.isArray(parsedResponse.questions)) {
-        throw new Error('Invalid response format: missing questions array');
-      }
+      const messages = [
+        {
+          role: "system",
+          content: `Eres un experto en generación de preguntas educativas. 
+                   Tu tarea es crear EXACTAMENTE 9 preguntas en español: 
+                   3 de nivel Principiante (easy)
+                   3 de nivel Intermedio (medium)
+                   3 de nivel Avanzado (hard)`
+        },
+        {
+          role: "user",
+          content: `Genera 9 preguntas de opción múltiple en español con esta distribución:
 
-      // Validate each question
-      parsedResponse.questions.forEach((q, i) => {
-        if (!q.subject || !q.topic || !q.question || !Array.isArray(q.options) || 
-            q.options.length !== 4 || typeof q.correctAnswer !== 'number' ||
-            q.correctAnswer < 0 || q.correctAnswer > 3) {
-          throw new Error(`Invalid question format at index ${i}`);
+          Materia: ${classification.subject}
+          Tema: ${classification.topic}
+          Descripción: ${description}
+
+          REQUISITOS:
+          - 3 preguntas de nivel Principiante (easy): conceptos básicos y directos
+          - 3 preguntas de nivel Intermedio (medium): comprensión moderada
+          - 3 preguntas de nivel Avanzado (hard): pensamiento crítico
+
+          Responde ÚNICAMENTE con un objeto JSON válido que contenga un array de 9 preguntas.
+          El formato JSON DEBE ser EXACTAMENTE el siguiente, sin texto adicional antes ni después:
+          {
+            "questions": [
+              {
+                "subject": "string (ej: Espanol)",
+                "topic": "string (ej: Palabras homofonas)",
+                "question": "string (texto de la pregunta)",
+                "options": ["string (opción 1)", "string (opción 2)", "string (opción 3)", "string (opción 4)"],
+                "correctAnswer": "number (0, 1, 2, o 3)",
+                "difficulty": "string (easy, medium, o hard)"
+              }
+              // ... 8 preguntas más siguiendo el mismo formato ...
+            ]
+          }
+          Asegúrate de que todas las claves y valores string estén entre comillas dobles y que los números no tengan comillas.
+          Verifica que haya exactamente 3 preguntas para cada nivel de dificultad (easy, medium, hard).
+          `
         }
+      ];
+
+      // Use GPT-4 for better understanding of the task
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo-16k", // Consider using a more capable model like gpt-4 if issues persist
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 4000,
+        presence_penalty: 0.2,
+        frequency_penalty: 0.3,
+        response_format: { type: "json_object" }
       });
 
-      return parsedResponse;
-    } catch (parseError) {
-      console.error('Error parsing OpenAI response:', {
-        error: parseError.message,
-        response: completion.choices[0].message.content
-      });
-      throw new Error('Error al procesar la respuesta. Formato inválido.');
-    }
-  } catch (error) {
-    console.error('Error generating questions:', {
-      error: error.message,
-      stack: error.stack,
-      classification,
-      difficulty,
-      description
-    });
-      // More specific error messages based on the error type
-    if (error.message.includes('JSON')) {
-      throw new Error('Error al procesar la respuesta de las preguntas. Formato inválido.');
-    } else if (error.message.includes('API key')) {
-      throw new Error('Error de configuración del servidor.');
-    } else if (error.message.includes('rate limit')) {
-      throw new Error('Se ha excedido el límite de solicitudes. Por favor intente de nuevo más tarde.');
-    } else if (error.name === 'OpenAIError') {
-      console.error('OpenAI specific error:', error);
-      if (error.status === 429) {
-        throw new Error('Se ha excedido el límite de solicitudes. Por favor intente de nuevo más tarde.');
-      } else {
-        throw new Error('Error en el servicio de OpenAI. Por favor intente de nuevo más tarde.');
+      const content = completion.choices[0].message.content.trim();
+      console.log(`Generated content (Attempt ${retries + 1}):`, content);
+      
+      try {
+        const parsedResponse = JSON.parse(content);
+        
+        if (!parsedResponse.questions || !Array.isArray(parsedResponse.questions)) {
+          throw new Error('Invalid response format: missing questions array');
+        }
+
+        if (parsedResponse.questions.length !== 9) {
+          throw new Error(`Expected exactly 9 questions, got ${parsedResponse.questions.length}`);
+        }
+
+        // Count questions by difficulty
+        const difficultyCount = {easy: 0, medium: 0, hard: 0};
+        
+        parsedResponse.questions.forEach((q, i) => {
+          if (!q.subject || !q.topic || !q.question || !Array.isArray(q.options) || 
+              q.options.length !== 4 || typeof q.correctAnswer !== 'number' ||
+              q.correctAnswer < 0 || q.correctAnswer > 3 || !q.difficulty) {
+            throw new Error(`Invalid question format at index ${i}`);
+          }
+          
+          if (!['easy', 'medium', 'hard'].includes(q.difficulty)) {
+            throw new Error(`Invalid difficulty "${q.difficulty}" for question at index ${i}`);
+          }
+          difficultyCount[q.difficulty]++;
+        });
+
+        if (difficultyCount.easy !== 3 || difficultyCount.medium !== 3 || difficultyCount.hard !== 3) {
+          throw new Error(`Incorrect difficulty distribution. Expected 3 of each, got: Principiante=${difficultyCount.easy}, Intermedio=${difficultyCount.medium}, Avanzado=${difficultyCount.hard}`);
+        }
+
+        console.log(`Successfully generated and validated all questions (Attempt ${retries + 1}):`, {
+          total: parsedResponse.questions.length,
+          byDifficulty: difficultyCount
+        });
+
+        return { questions: parsedResponse.questions }; // Success, return the questions
+      } catch (parseError) {
+        console.error(`Error parsing or validating response (Attempt ${retries + 1}):`, parseError);
+        console.error(`Raw content that caused error (Attempt ${retries + 1}):`, content);
+        // If parsing or validation fails, it's likely a formatting issue, so retry
+        retries++;
+        console.log(`Retrying question generation... (Attempt ${retries + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * retries)); // Wait before retrying
       }
-    } else {
-      throw new Error('Error al generar preguntas: ' + error.message);
+    } catch (error) {
+      console.error(`Error during question generation process (Attempt ${retries + 1}):`, {
+        error: error.message,
+        stack: error.stack,
+        classification,
+        description
+      });
+      
+      // If it's an OpenAI API error (like rate limit), we might want to retry
+      if (error.name === 'OpenAIError' && error.status === 429) {
+         retries++;
+         console.log(`Rate limit hit. Retrying question generation... (Attempt ${retries + 1}/${maxRetries})`);
+         await new Promise(resolve => setTimeout(resolve, 5000 * retries)); // Wait longer for rate limit
+      } else if (error.message.includes('API key')) {
+         // Don't retry on API key errors
+         throw new Error('Error de configuración del servidor.');
+      }
+      else {
+        // For other errors, retry
+        retries++;
+        console.log(`Retrying question generation due to other error... (Attempt ${retries + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * retries)); // Wait before retrying
+      }
     }
   }
+
+  // If all retries fail
+  console.error(`Failed to generate valid questions after ${maxRetries} attempts.`);
+  throw new Error('Failed to generate valid questions after multiple attempts.');
 }
 
 // Add helper functions for difficulty conversion
@@ -256,31 +291,29 @@ function normalizeDifficulty(displayDifficulty) {
 
 // API Endpoints
 app.post('/api/generate', async (req, res) => {
+  console.log('/api/generate: Received generate request:', req.body);
   try {
-    console.log('Received generate request:', req.body);
-    
-    const { description, difficulty = 'medium' } = req.body;
+    const { description } = req.body;
     
     if (!description) {
-      console.log('Missing description in request');
+      console.log('/api/generate: Missing description in request');
       return res.status(400).json({ error: 'Por favor ingresa una descripción' });
     }
 
-    if (!['easy', 'medium', 'hard'].includes(difficulty)) {
-      console.log('Invalid difficulty:', difficulty);
-      return res.status(400).json({ error: 'Dificultad inválida. Debe ser: easy, medium, o hard' });
-    }
-
+    console.log('/api/generate: Processing request to generate questions for all difficulty levels');
+    
     // First attempt to classify the description
-    console.log('Classifying description:', description);
+    console.log('/api/generate: Classifying description:', description);
     const classification = await classifyDescription(description);
-    console.log('Classification result:', classification);
+    console.log('/api/generate: Classification result:', classification);
 
-    // Then generate questions with difficulty
-    console.log('Generating questions with classification:', classification);
-    const generatedQuestions = await generateQuestions(description, classification, difficulty);
+    // Generate questions for all difficulty levels
+    console.log('/api/generate: Calling generateQuestions...');
+    const generatedQuestions = await generateQuestions(description, classification);
+    console.log('/api/generate: generateQuestions returned:', generatedQuestions);
     
     // Store questions in database
+    console.log('/api/generate: Storing generated questions in database...');
     const stmt = db.prepare(`
       INSERT INTO questions (subject, topic, learning_objective, question, options, correct_answer, difficulty)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -296,11 +329,13 @@ app.post('/api/generate', async (req, res) => {
         q.correctAnswer,
         q.difficulty
       );
+      console.log('/api/generate: Inserted question with ID:', result.lastInsertRowid);
       return { ...q, id: result.lastInsertRowid };
     });
 
+    console.log('/api/generate: Successfully stored', questions.length, 'questions.');
     res.json({ questions });  } catch (error) {
-    console.error('Server error:', {
+    console.error('/api/generate: Server error during generation:', {
       error: error.message,
       stack: error.stack,
       body: req.body
@@ -310,7 +345,7 @@ app.post('/api/generate', async (req, res) => {
         error: error.message 
       });
     } else if (error.message.includes('API key')) {
-      console.error('OpenAI API Key error:', error);
+      console.error('/api/generate: OpenAI API Key error:', error);
       res.status(500).json({ 
         error: 'Error de configuración del servidor. Por favor contacte al administrador.' 
       });
@@ -327,12 +362,12 @@ app.post('/api/generate', async (req, res) => {
         error: 'Error al generar las preguntas. Por favor intente de nuevo con una descripción diferente.' 
       });
     } else if (error.name === 'OpenAIError') {
-      console.error('OpenAI API error:', error);
+      console.error('/api/generate: OpenAI API error:', error);
       res.status(500).json({ 
         error: 'Error en el servicio de OpenAI. Por favor intente de nuevo más tarde.' 
       });
     } else {
-      console.error('Unexpected error:', error);
+      console.error('/api/generate: Unexpected error:', error);
       res.status(500).json({ 
         error: 'Error inesperado. Por favor intente de nuevo.' 
       });
@@ -561,4 +596,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-

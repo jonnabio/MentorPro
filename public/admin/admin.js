@@ -152,10 +152,10 @@ function displayQuestions(questions, targetContainer = document.getElementById('
                         ${option}
                     </div>
                 `).join('')}
-            </div>
-            <div class="metadata">
+            </div>            <div class="metadata">
                 <span>Materia: ${q.subject}</span>
                 <span>Tema: ${q.topic}</span>
+                <span>Dificultad: ${displayDifficulty(q.difficulty)}</span>
             </div>
         </div>
     `).join('');
@@ -263,4 +263,14 @@ async function saveQuestion(id) {
         console.error('Error updating question:', error);
         alert(error.message);
     }
+}
+
+// Add helper function for difficulty conversion
+function displayDifficulty(dbDifficulty) {
+    const mapping = {
+        'easy': 'Principiante',
+        'medium': 'Intermedio',
+        'hard': 'Avanzado'
+    };
+    return mapping[dbDifficulty] || dbDifficulty;
 }

@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (elements.subjectSelect?.value) params.subject = elements.subjectSelect.value;
             if (elements.topicSelect?.value) params.topic = elements.topicSelect.value;
             if (elements.difficultySelect?.value) params.difficulty = elements.difficultySelect.value;
-            params.limit = '5';
+            params.limit = '9';
 
             const queryParams = new URLSearchParams(params);
             console.log('Query parameters:', Object.fromEntries(queryParams.entries()));console.log('Sending request with params:', queryParams.toString());
@@ -359,12 +359,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         // Check if quiz is complete
-        if (totalAnswered === 5) {
+        if (totalAnswered === 9) {
             showQuizCompletion();
         }
     }    function showQuizCompletion() {
         console.log('Showing quiz completion with features:', features);
-        const scorePercentage = (currentScore / 5) * 100;
+        const scorePercentage = (currentScore / 9) * 100;
         
         // Check if questionsContainer exists before attempting to modify it
         if (!elements.questionsContainer) {
