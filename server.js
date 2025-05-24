@@ -128,8 +128,12 @@ async function generateQuestions(description, classification) {
 
   while (retries < maxRetries) {
     try {
-      console.log(`Generating questions for all difficulty levels (Attempt ${retries + 1}/${maxRetries})`);
-        const messages = [
+      console.log('=== Question Generation Attempt ===');
+      console.log(`Attempt ${retries + 1}/${maxRetries}`);
+      console.log('Description:', description);
+      console.log('Classification:', classification);
+
+      const messages = [
         {
           role: "system",
           content: `Eres un sistema especializado en la generación de preguntas educativas en formato JSON.
@@ -139,7 +143,9 @@ REGLAS ESTRICTAS:
 3. NUNCA incluyas comentarios dentro del JSON
 4. Usa SOLAMENTE comillas dobles para strings
 5. NO uses caracteres especiales ni tildes en subject/difficulty
-6. Los números NO deben tener comillas
+6. Todos los valores en el array "options" DEBEN ser strings
+   CORRECTO: ["123", "456", "789", "012"]
+   INCORRECTO: [123, 456, 789, 012]
 7. Sigue EXACTAMENTE la estructura del ejemplo proporcionado
 
 DISTRIBUCIÓN OBLIGATORIA:
@@ -151,7 +157,7 @@ DISTRIBUCIÓN OBLIGATORIA:
           role: "user",
           content: `Genera un objeto JSON con 9 preguntas de opción múltiple en español.
 
-PARÁMETROS:
+DETALLES DEL TEMA:
 Materia: ${classification.subject}
 Tema: ${classification.topic}
 Descripción: ${description}
@@ -160,42 +166,37 @@ ESTRUCTURA JSON REQUERIDA:
 {
   "questions": [
     {
-      "subject": "Espanol",
-      "topic": "Verbos",
-      "question": "¿Cuál es el tiempo verbal correcto en la oración 'Ayer ___ al parque'?",
-      "options": ["fui", "iré", "voy", "iba"],
+      "subject": "${classification.subject}",
+      "topic": "${classification.topic}",
+      "question": "string (pregunta en español)",
+      "options": ["opción 1", "opción 2", "opción 3", "opción 4"],
       "correctAnswer": 0,
       "difficulty": "easy"
     }
   ]
 }
 
-VALIDACIÓN REQUERIDA:
-1. DEBE contener array "questions" con EXACTAMENTE 9 preguntas
-2. Cada pregunta DEBE tener:
-   - "subject": string (exactamente como se provee en Parámetros)
-   - "topic": string (relacionado al tema proporcionado)
-   - "question": string (pregunta clara en español)
-   - "options": array con EXACTAMENTE 4 strings
-   - "correctAnswer": número entre 0 y 3
-   - "difficulty": string ("easy", "medium", o "hard")
-3. DEBE haber EXACTAMENTE:
-   - 3 preguntas con "difficulty": "easy"
-   - 3 preguntas con "difficulty": "medium"
-   - 3 preguntas con "difficulty": "hard"
+VALIDACIÓN:
+1. Exactamente 9 preguntas
+2. Cada pregunta debe tener todos los campos requeridos
+3. Array "options" debe tener exactamente 4 opciones como strings
+4. "correctAnswer" debe ser un número entre 0 y 3
+5. "difficulty" debe ser "easy", "medium", o "hard"
+6. Exactamente 3 preguntas de cada nivel de dificultad
 
 NIVELES DE DIFICULTAD:
-- easy: Conceptos básicos, preguntas directas, vocabulario simple
-- medium: Comprensión moderada, aplicación de conceptos
-- hard: Pensamiento crítico, análisis complejo, casos prácticos
+- easy: Conceptos básicos, preguntas directas
+- medium: Comprensión y aplicación de conceptos
+- hard: Pensamiento crítico, análisis complejo
 
-NO incluyas comentarios, texto explicativo, ni caracteres adicionales fuera del objeto JSON.`
+NO incluir texto adicional fuera del objeto JSON.`
         }
       ];
 
-      // Use GPT-4 for better understanding of the task
+      console.log('Sending request to OpenAI...');
+      
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo-16k", // Consider using a more capable model like gpt-4 if issues persist
+        model: "gpt-3.5-turbo-16k",
         messages: messages,
         temperature: 0.7,
         max_tokens: 4000,
@@ -204,24 +205,42 @@ NO incluyas comentarios, texto explicativo, ni caracteres adicionales fuera del 
         response_format: { type: "json_object" }
       });
 
+      console.log('Received response from OpenAI');
       const content = completion.choices[0].message.content.trim();
-      console.log(`Generated content (Attempt ${retries + 1}):`, content);
       
+      // Log the first 500 characters of content for debugging
+      console.log('Response preview:', content.substring(0, 500) + '...');
+
       try {
-        const parsedResponse = JSON.parse(content);
+        // Pre-process the content to ensure it's valid JSON
+        let cleanContent = content.trim();
+        if (!cleanContent.endsWith('}')) {
+          console.log('Content does not end with }, attempting to fix...');
+          cleanContent = cleanContent.substring(0, cleanContent.lastIndexOf('}') + 1);
+        }
+        
+        console.log('Attempting to parse response as JSON...');
+        const parsedResponse = JSON.parse(cleanContent);
         
         if (!parsedResponse.questions || !Array.isArray(parsedResponse.questions)) {
           throw new Error('Invalid response format: missing questions array');
         }
 
-        if (parsedResponse.questions.length !== 9) {
-          throw new Error(`Expected exactly 9 questions, got ${parsedResponse.questions.length}`);
-        }
+        console.log(`Parsed ${parsedResponse.questions.length} questions successfully`);
+        console.log('Validating questions...');
+
+        // Ensure all options are strings
+        parsedResponse.questions = parsedResponse.questions.map(q => ({
+          ...q,
+          options: q.options.map(opt => String(opt))
+        }));
 
         // Count questions by difficulty
         const difficultyCount = {easy: 0, medium: 0, hard: 0};
         
         parsedResponse.questions.forEach((q, i) => {
+          console.log(`Validating question ${i + 1}/${parsedResponse.questions.length}`);
+
           if (!q.subject || !q.topic || !q.question || !Array.isArray(q.options) || 
               q.options.length !== 4 || typeof q.correctAnswer !== 'number' ||
               q.correctAnswer < 0 || q.correctAnswer > 3 || !q.difficulty) {
@@ -234,52 +253,66 @@ NO incluyas comentarios, texto explicativo, ni caracteres adicionales fuera del 
           difficultyCount[q.difficulty]++;
         });
 
-        if (difficultyCount.easy !== 3 || difficultyCount.medium !== 3 || difficultyCount.hard !== 3) {
-          throw new Error(`Incorrect difficulty distribution. Expected 3 of each, got: Principiante=${difficultyCount.easy}, Intermedio=${difficultyCount.medium}, Avanzado=${difficultyCount.hard}`);
+        if (parsedResponse.questions.length !== 9) {
+          throw new Error(`Expected exactly 9 questions, got ${parsedResponse.questions.length}`);
         }
 
-        console.log(`Successfully generated and validated all questions (Attempt ${retries + 1}):`, {
-          total: parsedResponse.questions.length,
-          byDifficulty: difficultyCount
-        });
+        if (difficultyCount.easy !== 3 || difficultyCount.medium !== 3 || difficultyCount.hard !== 3) {
+          throw new Error(`Incorrect difficulty distribution. Got: easy=${difficultyCount.easy}, medium=${difficultyCount.medium}, hard=${difficultyCount.hard}`);
+        }
 
-        return { questions: parsedResponse.questions }; // Success, return the questions
+        console.log('All validations passed successfully!');
+        console.log('Questions by difficulty:', difficultyCount);
+
+        return { questions: parsedResponse.questions };
       } catch (parseError) {
-        console.error(`Error parsing or validating response (Attempt ${retries + 1}):`, parseError);
-        console.error(`Raw content that caused error (Attempt ${retries + 1}):`, content);
-        // If parsing or validation fails, it's likely a formatting issue, so retry
+        console.error('=== Parse Error Details ===');
+        console.error('Error:', parseError.message);
+        console.error('Stack:', parseError.stack);
+        console.error('Raw content causing error:', content);
+        
+        if (retries >= maxRetries - 1) {
+          throw new Error(`Failed to generate valid questions after ${maxRetries} attempts. Last error: ${parseError.message}`);
+        }
+        
         retries++;
-        console.log(`Retrying question generation... (Attempt ${retries + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * retries)); // Wait before retrying
+        console.log(`Retrying question generation in ${Math.min(1000 * Math.pow(2, retries), 10000)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, retries), 10000)));
       }
     } catch (error) {
-      console.error(`Error during question generation process (Attempt ${retries + 1}):`, {
-        error: error.message,
-        stack: error.stack,
-        classification,
-        description
-      });
+      console.error('=== Generation Error Details ===');
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('Classification:', classification);
+      console.error('Description:', description);
       
-      // If it's an OpenAI API error (like rate limit), we might want to retry
-      if (error.name === 'OpenAIError' && error.status === 429) {
-         retries++;
-         console.log(`Rate limit hit. Retrying question generation... (Attempt ${retries + 1}/${maxRetries})`);
-         await new Promise(resolve => setTimeout(resolve, 5000 * retries)); // Wait longer for rate limit
-      } else if (error.message.includes('API key')) {
-         // Don't retry on API key errors
-         throw new Error('Error de configuración del servidor.');
+      if (retries >= maxRetries - 1) {
+        console.error('All retry attempts failed');
+        throw new Error('No se pudieron generar preguntas después de varios intentos. Por favor intente con una descripción diferente.');
       }
-      else {
-        // For other errors, retry
-        retries++;
-        console.log(`Retrying question generation due to other error... (Attempt ${retries + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * retries)); // Wait before retrying
+      
+      retries++;
+      
+      if (error.name === 'OpenAIError') {
+        if (error.status === 429) {
+          console.log('Rate limit hit, waiting longer before retry...');
+          await new Promise(resolve => setTimeout(resolve, Math.min(5000 * Math.pow(2, retries), 30000)));
+        } else {
+          console.error('OpenAI API error:', error.status, error.message);
+          throw new Error('Error en el servicio de OpenAI. Por favor intente de nuevo más tarde.');
+        }
+      } else if (error.message.includes('API key')) {
+        throw new Error('Error de configuración del servidor.');
+      } else {
+        console.log(`Retrying after error in ${Math.min(1000 * Math.pow(2, retries), 10000)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, retries), 10000)));
       }
     }
   }
 
-  // If all retries fail
-  console.error(`Failed to generate valid questions after ${maxRetries} attempts.`);
+  console.error('=== Question Generation Failed ===');
+  console.error(`Failed to generate valid questions after ${maxRetries} attempts`);
   throw new Error('Failed to generate valid questions after multiple attempts.');
 }
 
