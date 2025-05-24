@@ -644,6 +644,70 @@ app.get('/admin', (req, res) => {
     res.sendFile('admin/index.html', { root: './public' });
 });
 
+// Add endpoint for quiz questions
+app.get('/api/quiz-questions', async (req, res) => {
+  try {
+    const { subject, topic, difficulty = 'easy' } = req.query;
+    const QUESTIONS_PER_LEVEL = 3;
+
+    let query = 'SELECT * FROM questions WHERE 1=1';
+    const params = [];
+
+    if (subject) {
+      query += ' AND subject = ?';
+      params.push(subject);
+    }
+
+    if (topic && topic !== 'all') {
+      query += ' AND topic = ?';
+      params.push(topic);
+    }
+
+    if (difficulty) {
+      query += ' AND difficulty = ?';
+      params.push(normalizeDifficulty(difficulty));
+    }
+
+    query += ' ORDER BY RANDOM() LIMIT ?';
+    params.push(QUESTIONS_PER_LEVEL);
+
+    const stmt = db.prepare(query);
+    let questions = stmt.all(...params);
+
+    // Format questions
+    questions = questions.map(q => ({
+      ...q,
+      options: JSON.parse(q.options),
+      difficulty: displayDifficulty(q.difficulty),
+      subject: normalizeSubject(q.subject)
+    }));
+
+    if (questions.length < QUESTIONS_PER_LEVEL) {
+      return res.json({
+        success: false,
+        message: 'No hay suficientes preguntas disponibles para este nivel. Por favor contacte al administrador para generar más preguntas.',
+        questions: []
+      });
+    }
+
+    const nextLevel = {
+      'easy': 'medium',
+      'medium': 'hard',
+      'hard': null
+    }[normalizeDifficulty(difficulty)];
+
+    res.json({
+      success: true,
+      questions,
+      requiredScore: 0.8, // 80% required to advance
+      nextLevel
+    });
+  } catch (error) {
+    console.error('Error fetching quiz questions:', error);
+    res.status(500).json({ error: 'Error al obtener las preguntas del quiz' });
+  }
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
