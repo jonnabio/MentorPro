@@ -59,18 +59,60 @@ db.exec(`
   );
 `);
 
-// Classify the subject and topic using OpenAI
-async function classifyDescription(description) {  const classificationPrompt = `
-    Analiza el siguiente texto y clasifica la materia y el tema.
-    IMPORTANTE: La materia DEBE ser EXACTAMENTE una de estas: Espanol, Matematicas, Ciencias, Social Studies.
-    No uses tildes ni caracteres especiales en las materias.
-    
-    Texto: "${description}"
-    
-    Responde solo con un objeto JSON con este formato exacto:
+// Classify the subject and topic using OpenAI with improved contextual analysis
+async function classifyDescription(description) {
+  const classificationPrompt = `
+    Analiza cuidadosamente el siguiente texto y clasifica la materia y el tema según el enfoque educativo principal.
+
+    GUÍA DE CLASIFICACIÓN POR MATERIA:
+
+    1. Social Studies (Estudios Sociales):
+       - Geografía política y física (territorio, regiones, cordilleras)
+       - Recursos naturales y su impacto en la sociedad
+       - Historia y desarrollo de lugares
+       - Cultura y sociedad
+       - Ubicación y características de territorios
+
+    2. Ciencias:
+       - Procesos naturales y sus causas
+       - Química y física básica
+       - Biología y seres vivos
+       - Ecosistemas y medio ambiente
+       - Experimentos y método científico
+
+    3. Matematicas:
+       - Operaciones y cálculos
+       - Geometría y mediciones
+       - Problemas matemáticos
+       - Números y cantidades
+
+    4. Espanol:
+       - Gramática y escritura
+       - Lectura y comprensión
+       - Comunicación y expresión
+       - Vocabulario y lenguaje
+
+    CRITERIOS DE DECISIÓN:
+    1. ¿Cuál es el OBJETIVO PRINCIPAL de la lección?
+    2. ¿Qué HABILIDADES se están desarrollando?
+    3. ¿Qué tipo de CONOCIMIENTO se está transmitiendo?
+
+    EJEMPLO 1:
+    "Volcanes y cordilleras de Costa Rica" -> Social Studies
+    Razón: Enfoque en ubicación geográfica y características del territorio.
+
+    EJEMPLO 2:
+    "Proceso de erupción volcánica" -> Ciencias
+    Razón: Enfoque en el proceso natural y sus causas.
+
+    Texto a analizar: "${description}"
+
+    Responde SOLO con un objeto JSON que incluya:
     {
-      "subject": "una de las materias válidas exactamente como están escritas arriba",
-      "topic": "tema específico del texto"
+      "subject": "materia exacta de la lista sin tildes",
+      "topic": "tema específico identificado",
+      "focus": "enfoque educativo principal",
+      "gradeLevel": "nivel educativo detectado (1-6)"
     }
   `;
   try {
@@ -121,37 +163,85 @@ async function classifyDescription(description) {  const classificationPrompt = 
   }
 }
 
-// Generate questions using OpenAI with retry mechanism
-async function generateQuestions(description, classification) {
+// Import the question generator
+const { generateQuestions } = require('./question_generator');
+
+// Generate questions endpoint handler
+async function handleQuestionGeneration(description, classification) {
   const maxRetries = 3;
   let retries = 0;
 
+  debugQuestion('Starting Question Generation', { description, classification });
+
   while (retries < maxRetries) {
     try {
-      console.log('=== Question Generation Attempt ===');
-      console.log(`Attempt ${retries + 1}/${maxRetries}`);
-      console.log('Description:', description);
-      console.log('Classification:', classification);
-
-      const messages = [
+      debugQuestion('Generation Attempt', { attempt: retries + 1, maxRetries });      const messages = [
         {
           role: "system",
-          content: `Eres un sistema especializado en la generación de preguntas educativas en formato JSON.
-REGLAS ESTRICTAS:
-1. Genera EXACTAMENTE 9 preguntas en español
-2. SIEMPRE responde con un objeto JSON válido, sin texto adicional
-3. NUNCA incluyas comentarios dentro del JSON
-4. Usa SOLAMENTE comillas dobles para strings
-5. NO uses caracteres especiales ni tildes en subject/difficulty
-6. Todos los valores en el array "options" DEBEN ser strings
-   CORRECTO: ["123", "456", "789", "012"]
-   INCORRECTO: [123, 456, 789, 012]
-7. Sigue EXACTAMENTE la estructura del ejemplo proporcionado
+          content: `You are an expert educational content creator specializing in creating multiple-choice questions in Spanish for primary school students.
+
+GRADE LEVEL: ${classification.gradeLevel}
+SUBJECT: ${classification.subject}
+FOCUS: ${classification.focus}
+
+KEY REQUIREMENTS:
+1. Create EXACTLY 9 questions in Spanish
+2. Return ONLY valid JSON
+3. Follow the exact structure provided
+4. Make all options strings, including numbers
+5. Use clear, age-appropriate language
+
+SUCCESS CRITERIA:
+1. Questions must be grade-appropriate
+2. Options must be distinct and plausible
+3. Correct answers must be clearly correct
+4. Language must be clear and simple
+5. All text in Spanish
+
+INSTRUCCIONES IMPORTANTES:
+1. Crea preguntas para estudiantes de ${classification.gradeLevel}
+2. Usa vocabulario y conceptos apropiados para la edad
+3. Incluye elementos visuales o descriptivos cuando sea necesario
+4. Relaciona las preguntas con experiencias cotidianas
+5. Asegura que las opciones sean claras y distintivas
+
+REGLAS TÉCNICAS:
+1. SIEMPRE genera EXACTAMENTE 9 preguntas
+2. Responde SOLO con JSON válido
+3. Usa comillas dobles para strings
+4. NO uses tildes en subject/difficulty
+5. Convierte números a strings: ["100", "200"]
+
+GUÍA DE CONTENIDO POR MATERIA:
+
+1. Social Studies:
+   - Preguntas sobre ubicación geográfica
+   - Características de territorios
+   - Impacto en la sociedad
+   - Aspectos culturales e históricos
+
+2. Ciencias:
+   - Procesos naturales
+   - Experimentos y observaciones
+   - Seres vivos y ecosistemas
+   - Método científico
+
+3. Matematicas:
+   - Operaciones numéricas
+   - Problemas prácticos
+   - Geometría y mediciones
+   - Números en formato consistente
+
+4. Espanol:
+   - Comprensión lectora
+   - Gramática y vocabulario
+   - Comunicación efectiva
+   - Expresión escrita
 
 DISTRIBUCIÓN OBLIGATORIA:
-- 3 preguntas "difficulty": "easy"
-- 3 preguntas "difficulty": "medium"
-- 3 preguntas "difficulty": "hard"`
+- 3 preguntas "difficulty": "easy" (conceptos básicos)
+- 3 preguntas "difficulty": "medium" (aplicación)
+- 3 preguntas "difficulty": "hard" (análisis)`
         },
         {
           role: "user",
@@ -193,6 +283,44 @@ NO incluir texto adicional fuera del objeto JSON.`
         }
       ];
 
+      // Add subject-specific prompting
+      const subjectPrompts = {
+        'Social Studies': `
+          TIPOS DE PREGUNTAS PARA ESTUDIOS SOCIALES:
+          - Ubicación geográfica: "¿Dónde se encuentra...?"
+          - Características: "¿Qué característica tiene...?"
+          - Impacto social: "¿Cómo influye...?"
+
+          - Historia: "¿Cuándo ocurrió...?"
+          - Cultura: "¿Qué importancia tiene...?"
+        `,
+        'Ciencias': `
+          TIPOS DE PREGUNTAS PARA CIENCIAS:
+          - Procesos: "¿Cómo funciona...?"
+          - Causas: "¿Por qué ocurre...?"
+          - Efectos: "¿Qué sucede cuando...?"
+          - Estructuras: "¿Qué partes tiene...?"
+          - Comparaciones: "¿Cuál es la diferencia entre...?"
+        `,
+        'Matematicas': `
+          TIPOS DE PREGUNTAS PARA MATEMÁTICAS:
+          - Cálculos: "Resuelve..."
+          - Problemas: "Calcula..."
+          - Aplicación: "Si tienes..."
+          - Razonamiento: "¿Cuánto necesitas para...?"
+        `,
+        'Espanol': `
+          TIPOS DE PREGUNTAS PARA ESPAÑOL:
+          - Significado: "¿Qué significa...?"
+          - Gramática: "¿Cuál es la forma correcta...?"
+          - Comprensión: "Según el texto..."
+          - Vocabulario: "La palabra que completa..."
+        `
+      };
+
+      // Add subject-specific guidance to the prompt
+      messages[0].content += `\n\n${subjectPrompts[classification.subject] || ''}`;
+
       console.log('Sending request to OpenAI...');
       
       const completion = await openai.chat.completions.create({
@@ -209,18 +337,33 @@ NO incluir texto adicional fuera del objeto JSON.`
       const content = completion.choices[0].message.content.trim();
       
       // Log the first 500 characters of content for debugging
-      console.log('Response preview:', content.substring(0, 500) + '...');
-
-      try {
-        // Pre-process the content to ensure it's valid JSON
-        let cleanContent = content.trim();
-        if (!cleanContent.endsWith('}')) {
-          console.log('Content does not end with }, attempting to fix...');
-          cleanContent = cleanContent.substring(0, cleanContent.lastIndexOf('}') + 1);
-        }
+      console.log('Response preview:', content.substring(0, 500) + '...');      try {
+        debugQuestion('Validating OpenAI Response', { contentLength: content?.length });
+          // Ensure we have content
+        if (!content || typeof content !== 'string') {
+          throw new Error('No content received from OpenAI');
+        }        
         
+        // Clean content and validate JSON structure
+        const cleanContent = content.trim();
+        debugQuestion('Content Validation', {
+          startsWithBrace: cleanContent.startsWith('{'),
+          endsWithBrace: cleanContent.endsWith('}'),
+          length: cleanContent.length
+        });
+
+        if (!cleanContent.startsWith('{') || !cleanContent.endsWith('}')) {
+          throw new Error('Invalid JSON structure received');
+        }
+
+        // Parse the JSON
         console.log('Attempting to parse response as JSON...');
         const parsedResponse = JSON.parse(cleanContent);
+        
+        // Validate basic structure
+        if (!parsedResponse || typeof parsedResponse !== 'object') {
+          throw new Error('Invalid response format: not an object');
+        }
         
         if (!parsedResponse.questions || !Array.isArray(parsedResponse.questions)) {
           throw new Error('Invalid response format: missing questions array');
@@ -259,6 +402,9 @@ NO incluir texto adicional fuera del objeto JSON.`
 
         if (difficultyCount.easy !== 3 || difficultyCount.medium !== 3 || difficultyCount.hard !== 3) {
           throw new Error(`Incorrect difficulty distribution. Got: easy=${difficultyCount.easy}, medium=${difficultyCount.medium}, hard=${difficultyCount.hard}`);
+        }        // Validate subject-specific content
+        if (!validateSubjectContent(parsedResponse.questions, classification)) {
+          throw new Error('Las preguntas generadas no cumplen con los criterios específicos de la materia');
         }
 
         console.log('All validations passed successfully!');
@@ -342,6 +488,74 @@ function normalizeDifficulty(displayDifficulty) {
   return mapping[displayDifficulty] || displayDifficulty;
 }
 
+// Add helper function for validating subject-specific content
+function validateSubjectContent(questions, classification) {
+  debugQuestion('Validating Subject Content', { subject: classification.subject });
+
+  // Helper to check if text includes any word from a list
+  const includesAny = (text, words) => words.some(word => text.toLowerCase().includes(word.toLowerCase()));
+
+  // Common question patterns
+  const commonPatterns = {
+    interrogative: ['qué', 'que', 'cuál', 'cual', 'cómo', 'como', 'dónde', 'donde',
+                   'por qué', 'por que', 'cuándo', 'cuando', 'cuánto', 'cuanto'],
+    location: ['dónde', 'donde', 'ubicación', 'lugar', 'región', 'zona', 'área'],
+    description: ['describe', 'explica', 'indica', 'menciona', 'señala'],
+    analysis: ['analiza', 'compara', 'relaciona', 'diferencia', 'distingue']
+  };
+
+  const subjectValidations = {
+    'Social Studies': (q) => {
+      const questionText = q.question.toLowerCase();
+      const topicWords = ['ubicación', 'territorio', 'región', 'característica', 'lugar', 
+                         'país', 'provincia', 'ciudad', 'cordillera', 'montaña', 'río'];
+      return topicWords.some(word => questionText.includes(word)) ||
+             commonQuestionWords.some(word => questionText.includes(word));
+    },
+    'Ciencias': (q) => {
+      const questionText = q.question.toLowerCase();
+      const scienceWords = ['proceso', 'causa', 'efecto', 'sistema', 'función', 
+                          'organismo', 'estructura', 'cambio'];
+      return scienceWords.some(word => questionText.includes(word)) ||
+             commonQuestionWords.some(word => questionText.includes(word));
+    },
+    'Matematicas': (q) => {
+      // Allow mixed numeric and word representations
+      const hasNumericOption = q.options.some(opt => !isNaN(opt.replace(/[,.]/g, '')));
+      const hasCalculation = q.question.toLowerCase().includes('calcula') ||
+                           q.question.toLowerCase().includes('resuelve');
+      return hasNumericOption || hasCalculation;
+    },
+    'Espanol': (q) => {
+      const questionText = q.question.toLowerCase();
+      const languageWords = ['palabra', 'oración', 'texto', 'significa', 'escribe',
+                           'lee', 'completa'];
+      return languageWords.some(word => questionText.includes(word)) ||
+             commonQuestionWords.some(word => questionText.includes(word));
+    }
+  };
+
+  const validSubjects = ['Social Studies', 'Ciencias', 'Matematicas', 'Espanol'];
+  if (!validSubjects.includes(classification.subject)) {
+    console.error('Invalid subject:', classification.subject);
+    return false;
+  }
+
+  const validator = subjectValidations[classification.subject];
+  if (!validator) {
+    console.error('No validator found for subject:', classification.subject);
+    return false;
+  }
+
+  return questions.every((q, i) => {
+    const isValid = validator(q);
+    if (!isValid) {
+      console.error('Question failed subject validation:', { index: i, question: q });
+    }
+    return isValid;
+  });
+}
+
 // API Endpoints
 app.post('/api/generate', async (req, res) => {
   console.log('/api/generate: Received generate request:', req.body);
@@ -360,9 +574,8 @@ app.post('/api/generate', async (req, res) => {
     const classification = await classifyDescription(description);
     console.log('/api/generate: Classification result:', classification);
 
-    // Generate questions for all difficulty levels
-    console.log('/api/generate: Calling generateQuestions...');
-    const generatedQuestions = await generateQuestions(description, classification);
+    // Generate questions for all difficulty levels    console.log('/api/generate: Calling generateQuestions...');
+    const generatedQuestions = await generateQuestions(openai, description, classification);
     console.log('/api/generate: generateQuestions returned:', generatedQuestions);
     
     // Store questions in database
