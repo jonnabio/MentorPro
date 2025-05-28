@@ -4,6 +4,13 @@ MentorPro is an interactive quiz generation and management system designed for e
 
 ## Latest Updates and Improvements
 
+### Architecture Improvements
+- Modularized question generation with separate generator module
+- Added debug utilities for enhanced monitoring and logging
+- Improved OpenAI integration with GPT-3.5 Turbo 16K
+- Better separation of concerns in server architecture
+- Enhanced retry mechanisms with exponential backoff
+
 ### Enhanced Error Handling & Reliability
 - Comprehensive error handling for OpenAI API interactions with specific error messages
 - Robust retry mechanism for AI question generation with up to 3 attempts
@@ -71,6 +78,29 @@ MentorPro is an interactive quiz generation and management system designed for e
 
 ## Architecture
 
+### Core Components
+
+1. **Main Server (server.js)**
+   - Express.js application setup
+   - API endpoint definitions
+   - Database initialization
+   - OpenAI client configuration
+   - Error handling middleware
+
+2. **Question Generator (question_generator.js)**
+   - AI-powered question generation logic
+   - Question format validation
+   - Subject-specific prompt management
+   - Retry mechanism with backoff
+   - Response validation and processing
+
+3. **Debug Utilities (utils/debug.js)**
+   - Structured logging system
+   - Question generation debugging
+   - Response validation monitoring
+   - Error tracking and reporting
+   - Performance monitoring
+
 ### Database Schema
 
 ```sql
@@ -93,9 +123,17 @@ CREATE TABLE questions (
 - `POST /api/generate`
   - Generates new questions based on learning objectives
   - Uses OpenAI for classification and question generation
+  - Multi-stage process:
+    1. Classification of subject and grade level
+    2. Generation of questions with balanced difficulty
+    3. Validation and format checking
   - Parameters:
     - `description`: Learning objective text
     - `difficulty` (optional): easy/medium/hard
+  - Response:
+    - Array of 9 questions (3 per difficulty level)
+    - Each question includes metadata and validation status
+    - Debug information in development mode
 
 #### Question Management
 - `GET /api/questions`
@@ -137,9 +175,12 @@ CREATE TABLE questions (
 │   ├── quiz.html
 │   ├── quiz.js
 │   └── styles.css
-├── server.js
-├── update_db.js
-├── check_db.js
+├── utils/
+│   └── debug.js      # Debug utilities for logging and monitoring
+├── server.js         # Main server application
+├── question_generator.js  # Question generation module
+├── update_db.js     # Database update utilities
+├── check_db.js      # Database verification tools
 └── package.json
 ```
 
@@ -153,7 +194,9 @@ CREATE TABLE questions (
    - Validates against predefined subject categories
    - Multiple retry attempts with exponential backoff
    - Comprehensive error handling and validation
-   - Logging and monitoring of classification process
+   - Logging and monitoring via debug utilities
+   - Grade level detection and validation
+   - Enhanced classification with subject-specific prompts
 
 2. **Question Generation**
    - AI generates multiple-choice questions based on:
@@ -248,8 +291,10 @@ CREATE TABLE questions (
 3. **Code Style**
    - Use ES6+ features
    - Implement proper error handling
-   - Include logging for debugging
+   - Use debug utilities for structured logging
    - Maintain consistent naming conventions
+   - Split functionality into logical modules
+   - Document key functions and components
 
 ## Error Handling
 
