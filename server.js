@@ -559,15 +559,21 @@ function validateSubjectContent(questions, classification) {
 // API Endpoints
 app.post('/api/generate', async (req, res) => {
   console.log('/api/generate: Received generate request:', req.body);
+  const startTime = Date.now();
+  
   try {
     const { description } = req.body;
     
     if (!description) {
       console.log('/api/generate: Missing description in request');
+      updateMetrics(false, Date.now() - startTime);
       return res.status(400).json({ error: 'Por favor ingresa una descripción' });
     }
 
     console.log('/api/generate: Processing request to generate questions for all difficulty levels');
+    
+    // Log the generation request
+    logActivity(`Question generation started: "${description.substring(0, 50)}..."`);
     
     // First attempt to classify the description
     console.log('/api/generate: Classifying description:', description);
@@ -600,12 +606,23 @@ app.post('/api/generate', async (req, res) => {
     });
 
     console.log('/api/generate: Successfully stored', questions.length, 'questions.');
+    
+    // Update metrics and log success
+    updateMetrics(true, Date.now() - startTime);
+    logActivity(`Generated ${questions.length} questions successfully`);
+    
     res.json({ questions });  } catch (error) {
     console.error('/api/generate: Server error during generation:', {
       error: error.message,
       stack: error.stack,
       body: req.body
-    });    // Handle different types of errors with appropriate status codes and messages
+    });
+    
+    // Update metrics for failed request
+    updateMetrics(false, Date.now() - startTime);
+    logActivity(`Question generation failed: ${error.message}`);
+    
+    // Handle different types of errors with appropriate status codes and messages
     if (error.message.includes('Invalid subject')) {
       res.status(400).json({ 
         error: error.message 
@@ -857,6 +874,11 @@ app.get('/admin', (req, res) => {
     res.sendFile('admin/index.html', { root: './public' });
 });
 
+// Monitor route
+app.get('/monitor', (req, res) => {
+    res.sendFile('monitor.html', { root: './public' });
+});
+
 // Add endpoint for quiz questions
 app.get('/api/quiz-questions', async (req, res) => {
   try {
@@ -920,6 +942,301 @@ app.get('/api/quiz-questions', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener las preguntas del quiz' });
   }
 });
+
+// Monitor API Endpoints
+let currentProvider = 'openai';
+let selectedModel = 'gpt-3.5-turbo';
+let providerStatus = {
+  openai: { status: 'online', enabled: true, responseTime: 0, usageToday: 0, costToday: 0 },
+  openrouter: { status: 'offline', enabled: false, responseTime: 0, usageToday: 0, costToday: 0 }
+};
+let metrics = {
+  totalRequests: 0,
+  successfulRequests: 0,
+  failedRequests: 0,
+  averageResponseTime: 0
+};
+let activityLog = [];
+
+// Helper function to log activity
+function logActivity(description) {
+  const entry = {
+    description,
+    timestamp: Date.now()
+  };
+  activityLog.unshift(entry);
+  if (activityLog.length > 100) {
+    activityLog = activityLog.slice(0, 100);
+  }
+}
+
+// Get provider status
+app.get('/api/providers/status', async (req, res) => {
+  try {
+    // Test OpenAI connection
+    try {
+      const startTime = Date.now();
+      await openai.models.list();
+      const responseTime = Date.now() - startTime;
+      providerStatus.openai = {
+        ...providerStatus.openai,
+        status: 'online',
+        responseTime
+      };
+    } catch (error) {
+      providerStatus.openai = {
+        ...providerStatus.openai,
+        status: 'offline',
+        error: error.message
+      };
+    }
+
+    // Test OpenRouter connection if key is available
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const startTime = Date.now();
+        const response = await fetch('https://openrouter.ai/api/v1/models', {
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const responseTime = Date.now() - startTime;
+          providerStatus.openrouter = {
+            ...providerStatus.openrouter,
+            status: 'online',
+            responseTime
+          };
+        } else {
+          throw new Error('API request failed');
+        }
+      } catch (error) {
+        providerStatus.openrouter = {
+          ...providerStatus.openrouter,
+          status: 'offline',
+          error: error.message
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      providers: providerStatus
+    });
+  } catch (error) {
+    console.error('Error checking provider status:', error);
+    res.status(500).json({ error: 'Error checking provider status' });
+  }
+});
+
+// Toggle provider
+app.post('/api/providers/:provider/toggle', async (req, res) => {
+  try {
+    const { provider } = req.params;
+    
+    if (!providerStatus[provider]) {
+      return res.status(400).json({ error: 'Invalid provider' });
+    }
+
+    providerStatus[provider].enabled = !providerStatus[provider].enabled;
+    
+    if (providerStatus[provider].enabled && providerStatus[provider].status === 'online') {
+      currentProvider = provider;
+      logActivity(`Provider switched to ${provider}`);
+    }
+
+    res.json({
+      success: true,
+      enabled: providerStatus[provider].enabled,
+      currentProvider
+    });
+  } catch (error) {
+    console.error('Error toggling provider:', error);
+    res.status(500).json({ error: 'Error toggling provider' });
+  }
+});
+
+// Get available models
+app.get('/api/models', async (req, res) => {
+  try {
+    const models = [];
+
+    // OpenAI models
+    if (providerStatus.openai.status === 'online') {
+      models.push(
+        { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'openai', cost: '$0.001/1K tokens' },
+        { id: 'gpt-4', name: 'GPT-4', provider: 'openai', cost: '$0.03/1K tokens' }
+      );
+    }
+
+    // OpenRouter models (if available)
+    if (providerStatus.openrouter.status === 'online' && process.env.OPENROUTER_API_KEY) {
+      models.push(
+        { id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B Instruct', provider: 'openrouter', cost: 'free' },
+        { id: 'openchat/openchat-7b:free', name: 'OpenChat 7B', provider: 'openrouter', cost: 'free' },
+        { id: 'google/gemma-7b-it:free', name: 'Gemma 7B IT', provider: 'openrouter', cost: 'free' },
+        { id: 'meta-llama/llama-3-8b-instruct:free', name: 'Llama 3 8B Instruct', provider: 'openrouter', cost: 'free' }
+      );
+    }
+
+    res.json({
+      success: true,
+      models,
+      currentModel: selectedModel,
+      currentProvider
+    });
+  } catch (error) {
+    console.error('Error getting models:', error);
+    res.status(500).json({ error: 'Error getting available models' });
+  }
+});
+
+// Select model
+app.post('/api/model/select', async (req, res) => {
+  try {
+    const { modelId, provider } = req.body;
+
+    if (!modelId || !provider) {
+      return res.status(400).json({ error: 'Model ID and provider are required' });
+    }
+
+    selectedModel = modelId;
+    currentProvider = provider;
+    
+    logActivity(`Model changed to ${modelId} (${provider})`);
+
+    res.json({
+      success: true,
+      selectedModel,
+      currentProvider
+    });
+  } catch (error) {
+    console.error('Error selecting model:', error);
+    res.status(500).json({ error: 'Error selecting model' });
+  }
+});
+
+// Get metrics
+app.get('/api/metrics', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      metrics: {
+        ...metrics,
+        currentProvider,
+        selectedModel,
+        providersOnline: Object.values(providerStatus).filter(p => p.status === 'online').length
+      }
+    });
+  } catch (error) {
+    console.error('Error getting metrics:', error);
+    res.status(500).json({ error: 'Error getting metrics' });
+  }
+});
+
+// Get recent activity
+app.get('/api/activity', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      activity: activityLog.slice(0, 20) // Return last 20 activities
+    });
+  } catch (error) {
+    console.error('Error getting activity:', error);
+    res.status(500).json({ error: 'Error getting activity log' });
+  }
+});
+
+// Test connection
+app.post('/api/test-connection', async (req, res) => {
+  try {
+    const results = {};
+
+    // Test OpenAI
+    try {
+      const startTime = Date.now();
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: 'Test' }],
+        max_tokens: 5
+      });
+      results.openai = {
+        status: 'success',
+        responseTime: Date.now() - startTime,
+        response: completion.choices[0].message.content
+      };
+    } catch (error) {
+      results.openai = {
+        status: 'error',
+        error: error.message
+      };
+    }
+
+    // Test OpenRouter if available
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const startTime = Date.now();
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'mistralai/mistral-7b-instruct:free',
+            messages: [{ role: 'user', content: 'Test' }],
+            max_tokens: 5
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          results.openrouter = {
+            status: 'success',
+            responseTime: Date.now() - startTime,
+            response: data.choices[0].message.content
+          };
+        } else {
+          throw new Error('API request failed');
+        }
+      } catch (error) {
+        results.openrouter = {
+          status: 'error',
+          error: error.message
+        };
+      }
+    }
+
+    logActivity('Connection test completed');
+
+    res.json({
+      success: true,
+      results
+    });
+  } catch (error) {
+    console.error('Error testing connection:', error);
+    res.status(500).json({ error: 'Error testing connections' });
+  }
+});
+
+// Update metrics (called by other endpoints)
+function updateMetrics(success, responseTime) {
+  metrics.totalRequests++;
+  if (success) {
+    metrics.successfulRequests++;
+  } else {
+    metrics.failedRequests++;
+  }
+  
+  // Update average response time
+  const totalTime = metrics.averageResponseTime * (metrics.totalRequests - 1) + responseTime;
+  metrics.averageResponseTime = Math.round(totalTime / metrics.totalRequests);
+}
+
+// Initialize activity log
+logActivity('MentorPro Monitor started');
 
 // Start server
 const PORT = process.env.PORT || 3000;

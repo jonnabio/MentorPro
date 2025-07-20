@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MentorPro - Monitor LLM</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navigation">
+            <a href="/" class="nav-link">Quiz</a>
+            <a href="/admin" class="nav-link">Administración</a>
+            <a href="/monitor" class="nav-link active">Monitor LLM</a>
+        </nav>
+
+        <!-- Header -->
+        <div class="monitor-header">
+            <h1>
+                <i class="fas fa-brain me-3"></i>
+                Monitor de Servicios LLM
+            </h1>
+            <p class="header-subtitle">
+                Gestiona proveedores de IA, monitorea costos y optimiza el rendimiento
+            </p>
+        </div>
+
+        <!-- Status Overview -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value" id="currentProvider">Cargando...</div>
+                <div class="metric-label">Proveedor Actual</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="currentModel">Cargando...</div>
+                <div class="metric-label">Modelo Activo</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="requestCount">0</div>
+                <div class="metric-label">Solicitudes Hoy</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value" id="estimatedCost">$0.00</div>
+                <div class="metric-label">Costo Estimado</div>
+            </div>
+        </div>
+
+        <!-- Provider Status Section -->
+        <div class="config-section">
+            <div class="section-header">
+                <h2><i class="fas fa-server me-2"></i>Estado de Proveedores</h2>
+                <button class="btn secondary-button" id="refreshProviderBtn">
+                    <i class="fas fa-sync-alt me-1"></i>Actualizar
+                </button>
+            </div>
+            
+            <div class="providers-grid">
+                <!-- OpenRouter Status -->
+                <div class="provider-card" id="openrouterCard" data-provider="openrouter">
+                    <div class="provider-header">
+                        <div class="provider-info">
+                            <h3><i class="fas fa-route me-2"></i>OpenRouter</h3>
+                            <div class="provider-status">
+                                <span class="status-indicator" id="openrouterStatus"></span>
+                                <span class="status-text" id="openrouterStatusText">Verificando...</span>
+                            </div>
+                        </div>
+                        <button class="btn-toggle" id="openrouterToggle">
+                            <i class="fas fa-power-off"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="provider-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Modelo Preferido:</span>
+                            <span class="detail-value" id="openrouterModel">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Modelos Gratis:</span>
+                            <span class="detail-value" id="openrouterFreeCount">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Tiempo de Respuesta:</span>
+                            <span class="detail-value" id="openrouterResponseTime">- ms</span>
+                        </div>
+                    </div>
+                    
+                    <div class="model-badges" id="openrouterModels">
+                        <!-- Models will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- OpenAI Status -->
+                <div class="provider-card" id="openaiCard" data-provider="openai">
+                    <div class="provider-header">
+                        <div class="provider-info">
+                            <h3><i class="fas fa-brain me-2"></i>OpenAI</h3>
+                            <div class="provider-status">
+                                <span class="status-indicator" id="openaiStatus"></span>
+                                <span class="status-text" id="openaiStatusText">Verificando...</span>
+                            </div>
+                        </div>
+                        <button class="btn-toggle" id="openaiToggle">
+                            <i class="fas fa-power-off"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="provider-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Modelo Predeterminado:</span>
+                            <span class="detail-value" id="openaiModel">-</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Tipo:</span>
+                            <span class="detail-value">Respaldo Premium</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Tiempo de Respuesta:</span>
+                            <span class="detail-value" id="openaiResponseTime">- ms</span>
+                        </div>
+                    </div>
+                    
+                    <div class="model-badges">
+                        <span class="model-badge premium">GPT-3.5-Turbo</span>
+                        <span class="model-badge premium">GPT-4</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Selection Section -->
+        <div class="config-section">
+            <div class="section-header">
+                <h2><i class="fas fa-cogs me-2"></i>Selección de Modelo</h2>
+                <div class="cost-mode-selector">
+                    <label for="costMode">Modo de Costo:</label>
+                    <select id="costMode">
+                        <option value="free">Solo Gratis</option>
+                        <option value="low_cost">Bajo Costo</option>
+                        <option value="balanced">Balanceado</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="models-container" id="modelsContainer">
+                <!-- Available models will be loaded here -->
+            </div>
+            
+            <div class="model-actions">
+                <button class="btn primary-button" id="testModelBtn">
+                    <i class="fas fa-play me-1"></i>Probar Modelo
+                </button>
+                <button class="btn secondary-button" id="saveConfigBtn">
+                    <i class="fas fa-save me-1"></i>Guardar Configuración
+                </button>
+            </div>
+        </div>
+
+        <!-- Real-time Monitoring -->
+        <div class="config-section">
+            <div class="section-header">
+                <h2><i class="fas fa-chart-line me-2"></i>Monitoreo en Tiempo Real</h2>
+            </div>
+            
+            <div class="monitoring-grid">
+                <div class="monitoring-card">
+                    <h4>Actividad Reciente</h4>
+                    <div class="activity-list" id="recentActivity">
+                        <!-- Recent activities will be loaded here -->
+                    </div>
+                </div>
+                
+                <div class="monitoring-card">
+                    <h4>Métricas de Rendimiento</h4>
+                    <div class="performance-metrics">
+                        <div class="metric-row">
+                            <span>Tiempo Promedio de Respuesta:</span>
+                            <span id="avgResponseTime">- ms</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Tasa de Éxito:</span>
+                            <span id="successRate">-%</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Solicitudes por Minuto:</span>
+                            <span id="requestsPerMinute">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <button class="btn primary-button" id="testConnectionBtn">
+                <i class="fas fa-plug me-1"></i>Probar Conexión
+            </button>
+            <button class="btn secondary-button" id="exportConfigBtn">
+                <i class="fas fa-download me-1"></i>Exportar Config
+            </button>
+            <button class="btn warning-button" id="resetConfigBtn">
+                <i class="fas fa-undo me-1"></i>Resetear
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Procesando...</div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer">
+        <!-- Toast messages will appear here -->
+    </div>
+
+    <script src="monitor.js"></script>
+</body>
+</html>
