@@ -1,13 +1,17 @@
 {
   "name": "mentorpro",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+  "description": "AI-powered educational quiz platform with multi-provider LLM support",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
   },
-  "keywords": [],
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["education", "ai", "quiz", "llm", "openai", "openrouter"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

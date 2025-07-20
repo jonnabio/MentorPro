@@ -44,6 +44,21 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static('public'));
 
+// Health check endpoint for Render.com
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    service: 'MentorPro',
+    version: '1.0.0'
+  });
+});
+
+// Root endpoint redirect
+app.get('/', (req, res) => {
+  res.redirect('/index.html');
+});
+
 // Initialize database - only create table if it doesn't exist
 db.exec(`
   CREATE TABLE IF NOT EXISTS questions (

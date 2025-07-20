@@ -1,8 +1,40 @@
 # MentorPro
 
-MentorPro is an interactive quiz generation and management system designed for educational purposes. It uses AI to automatically generate multiple-choice questions based on learning objectives, making it ideal for teachers and educational institutions.
+MentorPro is an AI-powered educational quiz platform with comprehensive LLM monitoring and multi-provider support. It automatically generates high-quality multiple-choice questions and provides real-time monitoring of AI services.
 
-## Latest Updates and Improvements
+## 🎯 Key Features
+
+### 🤖 AI-Powered Question Generation
+- Multi-provider LLM support (OpenAI + OpenRouter)
+- Intelligent subject classification and validation
+- Support for multiple difficulty levels (easy, medium, hard)
+- Contextual question generation for Costa Rican curriculum
+
+### 📊 LLM Service Monitor
+- Real-time provider status monitoring
+- Interactive model selection and switching
+- Cost tracking and usage analytics  
+- Performance metrics and response time monitoring
+- Activity logging and export functionality
+
+### 🎓 Educational Focus
+- Designed for Costa Rican educational standards
+- Subject-specific validation (Math, Science, Social Studies, Spanish)
+- Grade-level appropriate content generation
+- Interactive quiz interface for students
+
+## 🚀 Quick Deploy to Render.com
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+### Environment Variables Required:
+```bash
+OPENAI_API_KEY=your_openai_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here  # Optional, for free models
+NODE_ENV=production
+```
+
+## 🛠️ Local Development
 
 ### Architecture Improvements
 - Modularized question generation with separate generator module
