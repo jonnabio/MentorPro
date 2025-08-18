@@ -52,13 +52,89 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Health check endpoint for Render.com
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
+app.get('/health', async (req, res) => {
+  const health = {
     status: 'healthy', 
     timestamp: new Date().toISOString(),
     service: 'MentorPro',
-    version: '1.0.0'
-  });
+    version: '1.0.0',
+    environment: {
+      NODE_ENV: process.env.NODE_ENV,
+      hasOpenAI: !!process.env.OPENAI_API_KEY,
+      hasSupabase: !!process.env.SUPABASE_URL,
+      dbType: db ? db.dbType : 'undefined'
+    }
+  };
+
+  // Test database connection
+  try {
+    if (db) {
+      await db.getStats();
+      health.database = 'connected';
+    } else {
+      health.database = 'not_initialized';
+      health.status = 'degraded';
+    }
+  } catch (error) {
+    health.database = 'error: ' + error.message;
+    health.status = 'degraded';
+  }
+
+  // Test OpenAI connection
+  try {
+    if (openai) {
+      health.openai = 'configured';
+    } else {
+      health.openai = 'not_initialized';
+      health.status = 'degraded';
+    }
+  } catch (error) {
+    health.openai = 'error: ' + error.message;
+    health.status = 'degraded';
+  }
+
+  const statusCode = health.status === 'healthy' ? 200 : 503;
+  res.status(statusCode).json(health);
+});
+
+// Debug endpoint for troubleshooting (only in development)
+app.get('/debug', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Debug endpoint disabled in production' });
+  }
+
+  const debug = {
+    timestamp: new Date().toISOString(),
+    environment: {
+      NODE_ENV: process.env.NODE_ENV,
+      PORT: process.env.PORT,
+      hasOpenAI: !!process.env.OPENAI_API_KEY,
+      openaiKeyLength: process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.length : 0,
+      hasSupabase: !!process.env.SUPABASE_URL,
+      supabaseUrlPreview: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 30) + '...' : 'not set'
+    },
+    database: {
+      initialized: !!db,
+      type: db ? db.dbType : 'undefined'
+    },
+    openai: {
+      initialized: !!openai
+    }
+  };
+
+  // Test database operations
+  if (db) {
+    try {
+      const stats = await db.getStats();
+      debug.database.stats = stats;
+      debug.database.status = 'working';
+    } catch (error) {
+      debug.database.error = error.message;
+      debug.database.status = 'error';
+    }
+  }
+
+  res.json(debug);
 });
 
 // Root endpoint redirect
@@ -657,9 +733,21 @@ app.post('/api/generate', async (req, res) => {
         error: 'Error en el servicio de OpenAI. Por favor intente de nuevo más tarde.' 
       });
     } else {
-      console.error('/api/generate: Unexpected error:', error);
+      console.error('/api/generate: Unexpected error:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        requestBody: req.body,
+        environment: {
+          NODE_ENV: process.env.NODE_ENV,
+          hasOpenAI: !!process.env.OPENAI_API_KEY,
+          hasSupabase: !!process.env.SUPABASE_URL,
+          dbType: db ? db.dbType : 'undefined'
+        }
+      });
       res.status(500).json({ 
-        error: 'Error inesperado. Por favor intente de nuevo.' 
+        error: 'Error inesperado. Por favor intente de nuevo.',
+        debug: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
