@@ -12,4 +12,6 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: SUPABASE_URL
+        sync: false
     healthCheckPath: /health

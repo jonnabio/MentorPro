@@ -1,35 +1,40 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3');
 const { OpenAI } = require('openai');
+const DatabaseManager = require('./database');
 
 const app = express();
 
 // Initialize database with better error handling
 let db;
-try {
-    db = new Database('quiz.db');
-    // Test the connection
-    db.prepare('SELECT 1').get();
+
+async function initializeApp() {
+  try {
+    db = new DatabaseManager();
+    await db.init();
     console.log('Database connection successful');
-} catch (error) {
+  } catch (error) {
     console.error('Database initialization error:', error);
     process.exit(1); // Exit if we can't connect to the database
-}
+  }
 
-// Initialize OpenAI with better error handling
-let openai;
-try {
+  // Initialize OpenAI with better error handling
+  try {
     if (!process.env.OPENAI_API_KEY) {
-        throw new Error('OPENAI_API_KEY environment variable is not set');
+      throw new Error('OPENAI_API_KEY environment variable is not set');
     }
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     console.log('OpenAI initialization successful');
-} catch (error) {
+    return openaiClient;
+  } catch (error) {
     console.error('OpenAI initialization error:', error);
     process.exit(1); // Exit if we can't initialize OpenAI
+  }
 }
+
+// Initialize app and export openai for use in endpoints
+let openai;
 
 // Middleware
 app.use(cors({
@@ -62,19 +67,7 @@ app.get('/', (req, res) => {
 });
 
 // Initialize database - only create table if it doesn't exist
-db.exec(`
-  CREATE TABLE IF NOT EXISTS questions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject TEXT,
-    topic TEXT,
-    learning_objective TEXT,
-    question TEXT,
-    options TEXT,
-    correct_answer INTEGER,
-    difficulty TEXT DEFAULT 'medium',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+// This is now handled automatically by DatabaseManager.init()
 
 // Classify the subject and topic using OpenAI with improved contextual analysis
 async function classifyDescription(description) {
@@ -603,24 +596,21 @@ app.post('/api/generate', async (req, res) => {
     
     // Store questions in database
     console.log('/api/generate: Storing generated questions in database...');
-    const stmt = db.prepare(`
-      INSERT INTO questions (subject, topic, learning_objective, question, options, correct_answer, difficulty)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const questions = generatedQuestions.questions.map(q => {
-      const result = stmt.run(
+    
+    const questions = [];
+    for (const q of generatedQuestions.questions) {
+      const result = await db.insertQuestion(
         q.subject,
         q.topic,
         description,
         q.question,
-        JSON.stringify(q.options),
+        q.options,
         q.correctAnswer,
         q.difficulty
       );
-      console.log('/api/generate: Inserted question with ID:', result.lastInsertRowid);
-      return { ...q, id: result.lastInsertRowid };
-    });
+      console.log('/api/generate: Inserted question with ID:', result.id);
+      questions.push({ ...q, id: result.id });
+    }
 
     console.log('/api/generate: Successfully stored', questions.length, 'questions.');
     
@@ -679,62 +669,28 @@ app.post('/api/generate', async (req, res) => {
 app.get('/api/questions', async (req, res) => {
   try {
     const { subject, topic, difficulty, limit } = req.query;
-    let query = 'SELECT * FROM questions';
-    const params = [];
+    
+    // Build filter object
+    const filters = {};
+    if (subject) filters.subject = subject;
+    if (topic) filters.topic = topic;
+    if (difficulty) filters.difficulty = normalizeDifficulty(difficulty);
+    if (limit) filters.limit = parseInt(limit);
 
-    // Build WHERE clause dynamically
-    const conditions = [];
-    if (subject) {
-      conditions.push('subject = ?');
-      params.push(subject);
-    }
-    if (topic) {
-      conditions.push('topic = ?');
-      params.push(topic);
-    }
-    if (difficulty) {
-      conditions.push('difficulty = ?');
-      params.push(normalizeDifficulty(difficulty));
-    }
+    // Log query details
+    console.log('Executing query with filters:', filters);
 
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
+    // Execute query using DatabaseManager
+    let questions = await db.getQuestions(filters);
 
-    query += ' ORDER BY RANDOM()';  // Randomize questions for quizzes
+    // Convert difficulties for display and normalize subjects
+    questions = questions.map(q => ({
+      ...q,
+      difficulty: displayDifficulty(q.difficulty),
+      subject: normalizeSubject(q.subject)
+    }));
 
-    if (limit) {
-      query += ' LIMIT ?';
-      params.push(parseInt(limit));
-    }    // Log query details
-    console.log('Executing query:', {
-      query,
-      params,
-      conditions
-    });
-
-    // Execute query
-    const stmt = db.prepare(query);
-    let questions = stmt.all(...params);
-
-    // Parse the options JSON string and convert difficulties for each question
-    questions = questions.map(q => {
-      try {
-        return {
-          ...q,
-          options: JSON.parse(q.options),
-          difficulty: displayDifficulty(q.difficulty),
-          subject: normalizeSubject(q.subject)
-        };
-      } catch (e) {
-        console.error('Error parsing options for question:', {
-          id: q.id,
-          options: q.options,
-          error: e.message
-        });
-        throw new Error('Error interno al procesar las preguntas');
-      }
-    });    // Return empty array instead of 404 when no questions found
+    // Return empty array instead of 404 when no questions found
     if (questions.length === 0) {
       return res.status(200).json({ 
         message: 'No se encontraron preguntas',
@@ -752,9 +708,8 @@ app.get('/api/questions', async (req, res) => {
 // Add endpoint to get subjects from the database
 app.get('/api/subjects', async (req, res) => {
   try {
-    // Query the database for unique subjects
-    const stmt = db.prepare('SELECT DISTINCT subject FROM questions ORDER BY subject');
-    const subjects = stmt.all().map(row => row.subject);
+    // Query the database for unique subjects using DatabaseManager
+    const subjects = await db.getSubjects();
 
     // If no subjects found in the database, provide default subjects
     if (!subjects || subjects.length === 0) {
@@ -776,20 +731,11 @@ app.get('/api/subjects', async (req, res) => {
 app.get('/api/topics', async (req, res) => {
   try {
     const { subject } = req.query;
-    let query = 'SELECT DISTINCT topic FROM questions';
-    const params = [];
+    
+    // Use DatabaseManager to get topics
+    const topics = await db.getTopics(subject);
 
-    if (subject) {
-      query += ' WHERE subject = ?';
-      params.push(subject);
-    }
-
-    query += ' ORDER BY topic';
-
-    const stmt = db.prepare(query);
-    const topics = stmt.all(...params);
-
-    res.json({ topics: topics.map(t => t.topic) });
+    res.json({ topics });
   } catch (error) {
     console.error('Error fetching topics:', error);
     res.status(500).json({ 
@@ -803,10 +749,9 @@ app.delete('/api/questions/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    const stmt = db.prepare('DELETE FROM questions WHERE id = ?');
-    const result = stmt.run(id);
+    const result = await db.deleteQuestion(id);
     
-    if (result.changes === 0) {
+    if (!result.success) {
       return res.status(404).json({ error: 'Pregunta no encontrada' });
     }
     
@@ -848,29 +793,21 @@ app.patch('/api/questions/:id', async (req, res) => {
     // Normalize the difficulty value if provided
     const dbDifficulty = difficulty ? normalizeDifficulty(difficulty) : 'medium';
 
-    const stmt = db.prepare(`
-      UPDATE questions 
-      SET question = ?, options = ?, correct_answer = ?, subject = ?, topic = ?, difficulty = ?
-      WHERE id = ?
-    `);
-
-    const result = stmt.run(
+    const result = await db.updateQuestion(id, {
       question,
-      JSON.stringify(options),
+      options,
       correctAnswer,
       subject,
       topic,
-      dbDifficulty,
-      id
-    );
+      difficulty: dbDifficulty
+    });
 
-    if (result.changes === 0) {
+    if (!result.success) {
       return res.status(404).json({ error: 'Pregunta no encontrada' });
     }
 
     // Return the updated question with converted display values
-    const updatedQuestion = db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
-    updatedQuestion.options = JSON.parse(updatedQuestion.options);
+    const updatedQuestion = result.question;
     updatedQuestion.difficulty = displayDifficulty(updatedQuestion.difficulty);
     updatedQuestion.subject = normalizeSubject(updatedQuestion.subject);
     
@@ -902,34 +839,20 @@ app.get('/api/quiz-questions', async (req, res) => {
     const { subject, topic, difficulty = 'easy' } = req.query;
     const QUESTIONS_PER_LEVEL = 3;
 
-    let query = 'SELECT * FROM questions WHERE 1=1';
-    const params = [];
+    // Build filter object
+    const filters = {
+      subject,
+      topic: topic !== 'all' ? topic : null,
+      difficulty: normalizeDifficulty(difficulty),
+      limit: QUESTIONS_PER_LEVEL,
+      random: true
+    };
 
-    if (subject) {
-      query += ' AND subject = ?';
-      params.push(subject);
-    }
-
-    if (topic && topic !== 'all') {
-      query += ' AND topic = ?';
-      params.push(topic);
-    }
-
-    if (difficulty) {
-      query += ' AND difficulty = ?';
-      params.push(normalizeDifficulty(difficulty));
-    }
-
-    query += ' ORDER BY RANDOM() LIMIT ?';
-    params.push(QUESTIONS_PER_LEVEL);
-
-    const stmt = db.prepare(query);
-    let questions = stmt.all(...params);
+    let questions = await db.getQuestions(filters);
 
     // Format questions
     questions = questions.map(q => ({
       ...q,
-      options: JSON.parse(q.options),
       difficulty: displayDifficulty(q.difficulty),
       subject: normalizeSubject(q.subject)
     }));
@@ -1253,10 +1176,23 @@ function updateMetrics(success, responseTime) {
 }
 
 // Initialize activity log
+// Initialize activity log
 logActivity('MentorPro Monitor started');
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Start server after initialization is complete
+async function startServer() {
+  try {
+    const openaiClient = await initializeApp();
+    openai = openaiClient;
+    
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('App initialization failed:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
