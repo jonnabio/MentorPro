@@ -455,19 +455,19 @@ class DatabaseManager {
     }
   }
 
-  async insertQuestion(subject, topic, learningObjective, question, options, correctAnswer, difficulty) {
+  async insertQuestion(subject, topic, question, options, correctAnswer, difficulty) {
     console.log('📝 Inserting single question...');
     
     if (this.dbType === 'postgres') {
       const client = await this.pool.connect();
       try {
         const query = `
-          INSERT INTO questions (subject, topic, learning_objective, question, options, correct_answer, difficulty)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          INSERT INTO questions (subject, topic, question, options, correct_answer, difficulty)
+          VALUES ($1, $2, $3, $4, $5, $6)
           RETURNING id
         `;
         const result = await client.query(query, [
-          subject, topic, learningObjective, question, 
+          subject, topic, question, 
           JSON.stringify(options), correctAnswer, difficulty
         ]);
         console.log('✅ Question inserted into PostgreSQL with ID:', result.rows[0].id);
@@ -478,11 +478,11 @@ class DatabaseManager {
     } else {
       return new Promise((resolve, reject) => {
         const query = `
-          INSERT INTO questions (subject, topic, learning_objective, question, options, correct_answer, difficulty)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO questions (subject, topic, question, options, correct_answer, difficulty)
+          VALUES (?, ?, ?, ?, ?, ?)
         `;
         this.db.run(query, [
-          subject, topic, learningObjective, question,
+          subject, topic, question,
           JSON.stringify(options), correctAnswer, difficulty
         ], function(err) {
           if (err) {

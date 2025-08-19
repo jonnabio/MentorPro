@@ -680,7 +680,6 @@ app.post('/api/generate', async (req, res) => {
       const result = await db.insertQuestion(
         q.subject,
         q.topic,
-        description,
         q.question,
         q.options,
         q.correctAnswer,
