@@ -6,9 +6,10 @@ class DatabaseManager {
     if (process.env.DATABASE_URL || process.env.SUPABASE_URL) {
       // Production/Supabase - PostgreSQL
       const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_URL;
+      console.log(`🔍 Raw connection string: ${connectionString ? connectionString.substring(0, 50) + '...' : 'UNDEFINED'}`);
       
       // For Render.com deployment, use individual parameters to avoid IPv6 issues
-      if (process.env.NODE_ENV === 'production' && connectionString.includes('supabase.co')) {
+      if (process.env.NODE_ENV === 'production' && connectionString && connectionString.includes('supabase.co')) {
         // Parse Supabase connection string and use individual parameters
         const url = new URL(connectionString);
         console.log(`🔗 Connecting to Supabase host: ${url.hostname}:${url.port || 5432}`);
@@ -24,7 +25,8 @@ class DatabaseManager {
           max: 10
         });
       } else {
-        // Use connection string for other cases
+        // Use connection string for other cases (Render PostgreSQL)
+        console.log(`🔗 Using connection string for: ${connectionString ? new URL(connectionString).hostname : 'INVALID'}`);
         this.pool = new Pool({
           connectionString: connectionString,
           ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
