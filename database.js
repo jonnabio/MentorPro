@@ -6,10 +6,34 @@ class DatabaseManager {
     if (process.env.DATABASE_URL || process.env.SUPABASE_URL) {
       // Production/Supabase - PostgreSQL
       const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_URL;
-      this.pool = new Pool({
-        connectionString: connectionString,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-      });
+      
+      // For Render.com deployment, use individual parameters to avoid IPv6 issues
+      if (process.env.NODE_ENV === 'production' && connectionString.includes('supabase.co')) {
+        // Parse Supabase connection string and use individual parameters
+        const url = new URL(connectionString);
+        console.log(`🔗 Connecting to Supabase host: ${url.hostname}:${url.port || 5432}`);
+        this.pool = new Pool({
+          host: url.hostname,
+          port: parseInt(url.port) || 5432,
+          database: url.pathname.slice(1), // Remove leading slash
+          user: url.username,
+          password: url.password,
+          ssl: { rejectUnauthorized: false },
+          connectionTimeoutMillis: 10000,
+          idleTimeoutMillis: 30000,
+          max: 10
+        });
+      } else {
+        // Use connection string for other cases
+        this.pool = new Pool({
+          connectionString: connectionString,
+          ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+          connectionTimeoutMillis: 10000,
+          idleTimeoutMillis: 30000,
+          max: 10
+        });
+      }
+      
       this.dbType = 'postgres';
       console.log('🗄️ Using PostgreSQL (Supabase)');
     } else {
