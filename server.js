@@ -645,6 +645,8 @@ function validateSubjectContent(questions, classification) {
 // API Endpoints
 app.post('/api/generate', async (req, res) => {
   console.log('/api/generate: Received generate request:', req.body);
+  console.log('/api/generate: Environment check - OpenAI Key present:', !!process.env.OPENAI_API_KEY);
+  console.log('/api/generate: Environment check - Database type:', db ? db.dbType : 'undefined');
   const startTime = Date.now();
   
   try {
