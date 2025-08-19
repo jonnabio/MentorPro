@@ -12,9 +12,9 @@ PORT=10000
 
 ### **Database Configuration (Supabase)**
 ```
-SUPABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.hhbdzdzfdreyxqpjvijo.supabase.co:5432/postgres
+SUPABASE_URL=postgresql://postgres:Nw4M-9VE-wXc*DA@db.hhbdzdzfdreyxqpjvijo.supabase.co:5432/postgres
 ```
-**⚠️ IMPORTANT**: Replace `[YOUR-PASSWORD]` with your actual Supabase database password
+**✅ READY**: This is your actual connection string with password included
 
 ### **AI Services Configuration**
 ```
@@ -90,7 +90,7 @@ For easy copy-paste, here's the complete set with placeholders:
 ```
 NODE_ENV=production
 PORT=10000
-SUPABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.hhbdzdzfdreyxqpjvijo.supabase.co:5432/postgres
+SUPABASE_URL=postgresql://postgres:Nw4M-9VE-wXc*DA@db.hhbdzdzfdreyxqpjvijo.supabase.co:5432/postgres
 OPENAI_API_KEY=your_openai_api_key_here
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 ACCESS_CODE=your_admin_password_here
