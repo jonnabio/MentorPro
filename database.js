@@ -53,8 +53,10 @@ class DatabaseManager {
     console.log(`🔧 Initializing ${this.dbType} database tables...`);
     
     if (this.dbType === 'postgres') {
-      const client = await this.pool.connect();
+      let client;
       try {
+        client = await this.pool.connect();
+        
         // Create questions table
         await client.query(`
           CREATE TABLE IF NOT EXISTS questions (
@@ -83,9 +85,25 @@ class DatabaseManager {
         console.log('✅ PostgreSQL tables initialized successfully');
       } catch (error) {
         console.error('❌ PostgreSQL initialization error:', error);
+        
+        // Provide helpful error messages for common issues
+        if (error.code === 'ENETUNREACH') {
+          console.error('🔥 NETWORK ERROR: Cannot reach PostgreSQL database');
+          console.error('💡 SOLUTIONS:');
+          console.error('   1. Use Render.com managed PostgreSQL instead of Supabase');
+          console.error('   2. Check if DATABASE_URL/SUPABASE_URL is correct');
+          console.error('   3. Verify network connectivity and firewall settings');
+        } else if (error.code === 'ENOTFOUND') {
+          console.error('🔥 DNS ERROR: Cannot resolve database hostname');
+          console.error('💡 Check your database URL format');
+        } else if (error.code === '28P01') {
+          console.error('🔥 AUTH ERROR: Invalid username or password');
+          console.error('💡 Verify your database credentials');
+        }
+        
         throw error;
       } finally {
-        client.release();
+        if (client) client.release();
       }
     } else {
       // SQLite initialization (compatible with existing structure)
